@@ -115,6 +115,7 @@ class Consumer(object):
             logger.debug('%s seeding %s with offset %s',
                 self.name, file_path, offset)
             self.tracker.add(file_path, offset)
+            self.tracker.save()
 
     def eat(self, file_path):
         self.lock.acquire(self.lock_timeout)
@@ -167,12 +168,15 @@ class Consumer(object):
 
     def track(self, file_path):
         self.tracker.add(file_path)
+        self.tracker.save()
 
     def untrack(self, file_path):
         self.tracker.remove(file_path)
+        self.tracker.save()
 
     def untrack_dir(self, dir_path):
         self.tracker.remove_dir(dir_path)
+        self.tracker.save()
 
 
 class DummyTracker(object):

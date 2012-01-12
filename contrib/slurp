@@ -18,13 +18,13 @@
 # check that networking is up.
 [ "$NETWORKING" = "no" ] && exit 0
 
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 NAME=slurp
 USER=root
-PROG="slurp"
+PROG=`which slurp`
 PID_FILE="/var/run/slurp.pid"
 LOCK_FILE="/var/lock/subsys/slurp"
 CONFIG="/etc/sysconfig/slurp"
-PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 MONITOR_PATHS="/var/log/messages"
 STATE_PATH="/var/lib/slurp"
