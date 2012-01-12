@@ -148,7 +148,7 @@ class Consumer(object):
                             self.tracker.update(file_path, offset_e)
                             del events[:]
                         elif len(events) >= self.batch_size:
-                            logger.info('%s eating %s events',
+                            logger.debug('%s eating %s events',
                                 self.name, len(events))
                             self.event_sink(events)
                             self.tracker.update(file_path, offset_e)
@@ -158,7 +158,7 @@ class Consumer(object):
                         self.tracker.update(file_path, offset_e)
                         del events[:]
                 et = time.time()
-                logger.info(
+                logger.debug(
                     '%s ate %s events (%s bytes) from %s in %0.4f sec(s)',
                     self.name, num_events, bytes, file_path, et - st)
             finally:
