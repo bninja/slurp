@@ -1,4 +1,4 @@
-# Pyinotify
+# slurp
 
 * License          : MIT
 * Project URL      : [https://github.com/bninja/slurp](https://github.com/bninja/slurp)
