@@ -398,11 +398,10 @@ class EventParser(object):
         src_file
         offset_b
         offset_e
-        tag
-        host
-        severity
-        timestamp
-        payload
+        {field-1}
+        {field-2}
+        ..
+        {field-n}
         """
         raise NotImplementedError()
 
@@ -417,6 +416,10 @@ def print_sink(event):
         event = [event]
     for e in event:
         print e
+
+
+def null_sink(event):
+    pass
 
 
 def seed(paths, conf):
@@ -469,12 +472,15 @@ class MonitorEvent(pyinotify.ProcessEvent):
 
 
 def monitor(paths, conf, daemonize=False, pid_file=None):
+    # TODO: move daemonize stuff to slurp script (use python-daemon)
     mask = pyinotify.ALL_EVENTS
     wm = pyinotify.WatchManager()
     for path in paths:
         path = path.strip()
-        logger.debug('monitoring %s', path)
         wm.add_watch(path, mask, rec=True, auto_add=True)
+        logger.debug('monitoring %s', path)
+        seed([path], conf)  # TODO: allow disable?
+        eat([path], conf)  # TODO: allow disable?
     notifier = pyinotify.Notifier(wm, default_proc_fun=MonitorEvent(conf))
     logger.debug('enter notification loop')
     notifier.loop(daemonize=daemonize, pid_file=pid_file)

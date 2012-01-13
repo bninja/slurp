@@ -54,7 +54,7 @@ def main():
     opt_parser.add_option(
         '--pid-file', default=None)
     opt_parser.add_option(
-        '--print-sink', action='store_true', default=False)
+        '--sink', choices=['print', 'null'], default=None)
 
     (opts, args) = opt_parser.parse_args()
 
@@ -72,13 +72,19 @@ def main():
         os.path.abspath(os.path.expanduser(os.path.expandvars(consumer_path)))
         for consumer_path in opts.consumers]
 
+    sink = None
+    if opts.sink == 'null':
+        sink = slurp.null_sink
+    elif opts.sink == 'print':
+        sink = slurp.print_sink
+
     conf = slurp.Conf(
         opts.state_path,
         consumer_paths,
         not opts.disable_locking,
         opts.lock_timeout,
         not opts.disable_tracking,
-        print_sink if opts.print_sink else None)
+        sink)
 
     if cmd in ('s', 'seed'):
         slurp.seed(paths or sys.stdin, conf)
