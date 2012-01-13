@@ -46,23 +46,23 @@ $MONITOR_PATHS \
 start() {
     [ -x $PROG ] || exit 5
     echo -n $"Starting $NAME: "
-    if [ "$(id -u)" != "0" ]; then
-daemon --pidfile $PIDFILE $PROG $OPTS
+    if [ "$(id -u)" != "0" ] || [ "$USER" = "root" ] ; then
+        daemon --pidfile $PID_FILE $PROG $OPTS
     else
-daemon --pidfile $PIDFILE --user $USER $PROG $OPTS
+        daemon --pidfile $PID_FILE --user $USER $PROG $OPTS
     fi
-retval=$?
+    retval=$?
     echo
-    [ $retval -eq 0 ] && touch $LOCKFILE
+    [ $retval -eq 0 ] && touch $LOCK_FILE
     return $retval
 }
 
 stop() {
     echo -n $"Stopping $NAME: "
-    killproc -p $PIDFILE $NAME
+    killproc -p $PID_FILE $NAME
     retval=$?
     echo
-    [ $retval -eq 0 ] && rm -f $LOCKFILE
+    [ $retval -eq 0 ] && rm -f $LOCK_FILE
     return $retval
 }
 
@@ -73,7 +73,7 @@ restart() {
 
 reload() {
     echo -n $"Reloading $NAME: "
-    killproc -p $PIDFILE $NAME -HUP
+    killproc -p $PID_FILE $NAME -HUP
     echo
 }
 
@@ -82,7 +82,7 @@ force_reload() {
 }
 
 rh_status() {
-    status -p $PIDFILE $NAME
+    status -p $PID_FILE $NAME
 }
 
 rh_status_q() {

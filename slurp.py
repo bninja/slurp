@@ -473,12 +473,12 @@ def monitor(paths, conf, daemonize=False, pid_file=None):
     wm = pyinotify.WatchManager()
     for path in paths:
         path = path.strip()
-        logger.info('monitoring %s', path)
+        logger.debug('monitoring %s', path)
         wm.add_watch(path, mask, rec=True, auto_add=True)
     notifier = pyinotify.Notifier(wm, default_proc_fun=MonitorEvent(conf))
-    logger.info('enter notification loop')
+    logger.debug('enter notification loop')
     notifier.loop(daemonize=daemonize, pid_file=pid_file)
-    logger.info('exit notification loop')
+    logger.debug('exit notification loop')
 
 
 def eat(paths, conf):
