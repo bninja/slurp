@@ -1,4 +1,5 @@
 .project
 .pydevproject
 pkg
+*.pyc
 slurp.egg-info/
