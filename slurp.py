@@ -5,6 +5,7 @@ import json
 from lockfile import FileLock
 import logging
 import os
+import pprint
 import time
 
 import pyinotify
@@ -20,12 +21,14 @@ class Conf(object):
             state_path, consumer_paths,
             locking, lock_timeout,
             tracking,
-            event_sink):
+            event_sink,
+            batch_size):
         self.state_path = state_path
         self.lock_class = FileLock if locking else DummyLock
         self.lock_timeout = lock_timeout
         self.tracker_class = Tracker if tracking else DummyTracker
         self.event_sink = event_sink
+        self.batch_size = batch_size
         self.consumers = self._load_consumers(consumer_paths)
 
     def _load_consumers(self, paths):
@@ -55,6 +58,8 @@ class Conf(object):
         return imp.load_source('', file_path).CONSUMERS
 
     def _create_consumer(self, **kwargs):
+        logger.debug('creating consumer %s:\n%s',
+            kwargs['name'], pprint.pformat(kwargs))
         patterns = kwargs.pop('patterns')
         block_terminal = kwargs.pop('block_terminal', '\n')
         block_preamble = kwargs.pop('block_preamble', None)
@@ -68,11 +73,17 @@ class Conf(object):
         kwargs['block_parser'] = block_parser
         file_path = os.path.join(self.state_path, kwargs['name'] + '.track')
         kwargs['tracker'] = self.tracker_class(file_path)
-        file_path = os.path.join(self.state_path, kwargs['name'] + '.lock')
+        file_path = os.path.join(self.state_path, kwargs['name'])
         kwargs['lock'] = self.lock_class(file_path)
         if self.event_sink:
+            logger.debug('overriding consumer %s event sink to %s',
+                kwargs['name'], self.event_sink.__name__)
             kwargs['event_sink'] = self.event_sink
         kwargs['lock_timeout'] = self.lock_timeout
+        if self.batch_size is not None:
+            logger.debug('overriding consumer %s batch size to %s',
+                kwargs['name'], self.batch_size)
+            kwargs['batch_size'] = self.batch_size
         return patterns, Consumer(**kwargs)
 
     def get_matching_consumers(self, file_path):
@@ -105,7 +116,9 @@ class Consumer(object):
         self.batch_size = batch_size
 
     def seed(self, file_path):
-        if not self.tracker.has(file_path):
+        if self.tracker.has(file_path):
+            logger.debug('%s already being tracked', file_path)
+        else:
             if self.backfill:
                 offset = 0
             else:
@@ -118,7 +131,11 @@ class Consumer(object):
             self.tracker.save()
 
     def eat(self, file_path):
+        logger.debug('locking %s with timeout %s',
+            self.lock.lock_file, self.lock_timeout)
         self.lock.acquire(self.lock_timeout)
+        logger.debug('locked %s with timeout %s',
+            self.lock.lock_file, self.lock_timeout)
         try:
             if not self.tracker.has(file_path):
                 if self.backfill:
@@ -142,6 +159,11 @@ class Consumer(object):
                         num_events += 1
                         event = self.event_parser(
                             file_path, offet_b, offset_e, raw)
+                        if event is None:
+                            logger.warning(
+                                'consumer %s parser returned nothing for:\n%s',
+                                self.name, raw)
+                            continue
                         events.append(event)
                         if not self.batch_size:
                             self.event_sink(events[0])
@@ -164,6 +186,7 @@ class Consumer(object):
             finally:
                 self.tracker.save()
         finally:
+            logger.debug('unlocking %s', self.lock.lock_file)
             self.lock.release()
 
     def track(self, file_path):
@@ -258,7 +281,7 @@ class Tracker(object):
 
 class DummyLock(object):
     def __init__(self, file_path):
-        pass
+        self.lock_file = file_path
 
     def acquire(self, timeout=None):
         pass
@@ -394,15 +417,6 @@ class MultiLineIterator(BlockIterator):
 
 class EventParser(object):
     def __call__(self, src_file, offset_b, offset_e, raw):
-        """
-        src_file
-        offset_b
-        offset_e
-        {field-1}
-        {field-2}
-        ..
-        {field-n}
-        """
         raise NotImplementedError()
 
 
@@ -471,8 +485,7 @@ class MonitorEvent(pyinotify.ProcessEvent):
                 consumer.untrack_dir(event.pathname)
 
 
-def monitor(paths, conf, daemonize=False, pid_file=None):
-    # TODO: move daemonize stuff to slurp script (use python-daemon)
+def monitor(paths, conf):
     mask = pyinotify.ALL_EVENTS
     wm = pyinotify.WatchManager()
     for path in paths:
@@ -483,7 +496,7 @@ def monitor(paths, conf, daemonize=False, pid_file=None):
         eat([path], conf)  # TODO: allow disable?
     notifier = pyinotify.Notifier(wm, default_proc_fun=MonitorEvent(conf))
     logger.debug('enter notification loop')
-    notifier.loop(daemonize=daemonize, pid_file=pid_file)
+    notifier.loop()
     logger.debug('exit notification loop')
 
 

@@ -6,7 +6,9 @@
 
 ## Dependencies
 
+* lockfile >= 1.9
 * pyinotify >= 0.9.3
+* python-daemon >= 1.5
 * Python >= 2.5
 
 

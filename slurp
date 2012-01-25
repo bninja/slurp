@@ -6,6 +6,8 @@ import os
 import sys
 import tempfile
 
+import daemon
+
 import slurp
 
 
@@ -44,6 +46,8 @@ def main():
     opt_parser.add_option(
         '--enable-syslog', action='store_true', default=False)
     opt_parser.add_option(
+        '--disable-stderrlog', action='store_true', default=False)
+    opt_parser.add_option(
         '-d', '--daemonize', action='store_true', default=False)
     opt_parser.add_option(
         '--disable-locking', action='store_true', default=False)
@@ -55,6 +59,8 @@ def main():
         '--pid-file', default=None)
     opt_parser.add_option(
         '--sink', choices=['print', 'null'], default=None)
+    opt_parser.add_option(
+        '--batch-size', type='int', default=None)
 
     (opts, args) = opt_parser.parse_args()
 
@@ -66,7 +72,7 @@ def main():
     paths = args[1:]
 
     log_level = getattr(logging, opts.log_level.upper())
-    configure_logging(log_level, True, opts.enable_syslog)
+    configure_logging(log_level, not opts.disable_stderrlog, opts.enable_syslog)
 
     consumer_paths = [
         os.path.abspath(os.path.expanduser(os.path.expandvars(consumer_path)))
@@ -84,13 +90,21 @@ def main():
         not opts.disable_locking,
         opts.lock_timeout,
         not opts.disable_tracking,
-        sink)
+        sink,
+        opts.batch_size)
 
     if cmd in ('s', 'seed'):
         slurp.seed(paths or sys.stdin, conf)
     elif cmd in ('m', 'monitor'):
-        slurp.monitor(paths or sys.stdin, conf,
-            daemonize=opts.daemonize, pid_file=opts.pid_file)
+        if opts.daemonize:
+            if opts.pid_file:
+                pid_file = lockfile.FileLock(opts.pid_file)
+            else:
+                pid_file = None
+            with daemon.DaemonContext(pidfile=pid_file):
+                slurp.monitor(paths, conf)
+        else:
+            slurp.monitor(paths or sys.stdin, conf)            
     elif cmd in ('e', 'eat'):
         slurp.eat(paths or sys.stdin, conf)
 
