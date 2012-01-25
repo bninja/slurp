@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import with_statement
 import logging
 import logging.handlers
 from optparse import OptionParser
@@ -7,7 +8,7 @@ import sys
 import tempfile
 
 from daemon import DaemonContext
-from lockfile import FileLock
+from lockfile.pidlockfile import PIDLockFile
 
 import slurp
 
@@ -100,7 +101,7 @@ def main():
     elif cmd in ('m', 'monitor'):
         if opts.daemonize:
             if opts.pid_file:
-                pid_file = FileLock(opts.pid_file)
+                pid_file = PIDLockFile(opts.pid_file)
             else:
                 pid_file = None
             with DaemonContext(pidfile=pid_file):
