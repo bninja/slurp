@@ -6,7 +6,8 @@ import os
 import sys
 import tempfile
 
-import daemon
+from daemon import DaemonContext
+from lockfile import FileLock
 
 import slurp
 
@@ -72,7 +73,8 @@ def main():
     paths = args[1:]
 
     log_level = getattr(logging, opts.log_level.upper())
-    configure_logging(log_level, not opts.disable_stderrlog, opts.enable_syslog)
+    configure_logging(
+        log_level, not opts.disable_stderrlog, opts.enable_syslog)
 
     consumer_paths = [
         os.path.abspath(os.path.expanduser(os.path.expandvars(consumer_path)))
@@ -98,13 +100,13 @@ def main():
     elif cmd in ('m', 'monitor'):
         if opts.daemonize:
             if opts.pid_file:
-                pid_file = lockfile.FileLock(opts.pid_file)
+                pid_file = FileLock(opts.pid_file)
             else:
                 pid_file = None
-            with daemon.DaemonContext(pidfile=pid_file):
+            with DaemonContext(pidfile=pid_file):
                 slurp.monitor(paths, conf)
         else:
-            slurp.monitor(paths or sys.stdin, conf)            
+            slurp.monitor(paths or sys.stdin, conf)
     elif cmd in ('e', 'eat'):
         slurp.eat(paths or sys.stdin, conf)
 
