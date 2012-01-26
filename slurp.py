@@ -155,15 +155,16 @@ class Consumer(object):
                     fo.seek(offset, os.SEEK_SET)
                     events = []
                     offset_e = offset
-                    for raw, offet_b, offset_e in self.block_parser(fo):
+                    for raw, offset_b, offset_e in self.block_parser(fo):
                         bytes += len(raw)
                         num_events += 1
                         event = self.event_parser(
-                            file_path, offet_b, offset_e, raw)
+                            file_path, offset_b, offset_e, raw)
                         if event is None:
                             logger.warning(
-                                'consumer %s parser returned nothing for:\n%s',
-                                self.name, raw)
+                               'consumer %s parser returned nothing for '
+                               '%s[%s:%s]',
+                                self.name, file_path, offset_b, offset_e)
                             continue
                         events.append(event)
                         if not self.batch_size:
@@ -325,8 +326,8 @@ class BlockIterator(object):
             result = self._parse(self.eof)
             if not result:
                 continue
-            raw, offet_b, offset_e = result
-            return raw, offet_b, offset_e
+            raw, offset_b, offset_e = result
+            return raw, offset_b, offset_e
         if self.buffer:
             if self.strict:
                 raise ValueError('%s[%s:] is partial block',
