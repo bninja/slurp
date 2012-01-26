@@ -8,6 +8,7 @@ import sys
 import tempfile
 
 from daemon import DaemonContext
+from daemon.daemon import get_maximum_file_descriptors
 from lockfile.pidlockfile import PIDLockFile
 
 import slurp
@@ -104,7 +105,15 @@ def main():
                 pid_file = PIDLockFile(opts.pid_file)
             else:
                 pid_file = None
-            with DaemonContext(pidfile=pid_file):
+
+            # FIXME: if we dont do this pynotify will peg cpu. need to figure
+            # out which fds to preserve.
+            max_fd = get_maximum_file_descriptors()
+            files_preserve = range(max_fd)
+
+            with DaemonContext(
+                    pidfile=pid_file,
+                    files_preserve=files_preserve):
                 slurp.monitor(paths, conf)
         else:
             slurp.monitor(paths or sys.stdin, conf)
