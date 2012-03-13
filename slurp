@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 from __future__ import with_statement
+import functools
 import logging
 import logging.handlers
 from optparse import OptionParser
 import os
+import signal
 import sys
 import tempfile
 
 from daemon import DaemonContext
-from daemon.daemon import get_maximum_file_descriptors
 from lockfile.pidlockfile import PIDLockFile
 
 import slurp
@@ -17,20 +18,56 @@ import slurp
 logger = logging.getLogger('slurp')
 
 
-def configure_logging(level, enable_stderr, enable_syslog):
+def configure_log(level):
     logger = logging.getLogger('')
     logger.setLevel(level)
-    if enable_stderr:
-        handler = logging.StreamHandler(sys.stderr)
-        fmt = logging.Formatter(
-            '%(asctime)s : %(levelname)s : %(name)s : %(message)s')
-        handler.setFormatter(fmt)
-        logger.addHandler(handler)
-    if enable_syslog:
-        handler = logging.handlers.SysLogHandler('/dev/log')
-        fmt = logging.Formatter('slurp[%(process)d]: %(message)s')
-        handler.setFormatter(fmt)
-        logger.addHandler(handler)
+
+
+def configure_stderr():
+    logger = logging.getLogger('')
+    handler = logging.StreamHandler(sys.stderr)
+    fmt = logging.Formatter(
+        '%(asctime)s : %(levelname)s : %(name)s : %(message)s')
+    handler.setFormatter(fmt)
+    logger.addHandler(handler)
+
+
+def configure_syslog():
+    logger = logging.getLogger('')
+    handler = logging.handlers.SysLogHandler('/dev/log')
+    fmt = logging.Formatter('slurp[%(process)d]: %(message)s')
+    handler.setFormatter(fmt)
+    logger.addHandler(handler)
+
+
+class Manager():
+    class Reload(Exception):
+        pass
+
+
+    class Terminate(Exception):
+        pass
+
+    
+    def __init__(self, create_conf):
+        self._conf = None
+        self.create_conf = create_conf
+        
+    @property
+    def conf(self):
+        if not self._conf:
+            logger.info('creating configuration')
+            self._conf = self.create_conf() 
+        return self._conf
+    
+    def on_reload(self, signum, frame):
+        logger.info('reloading')
+        self._conf = None
+        raise self.Reload()
+    
+    def on_terminate(self, signum, frame):
+        logger.info('terminating')
+        raise self.Terminate()
 
 
 def main():
@@ -75,8 +112,9 @@ def main():
     paths = args[1:]
 
     log_level = getattr(logging, opts.log_level.upper())
-    configure_logging(
-        log_level, not opts.disable_stderrlog, opts.enable_syslog)
+    configure_log(log_level)
+    if not opts.disable_stderrlog:
+        configure_stderr()
 
     consumer_paths = [
         os.path.abspath(os.path.expanduser(os.path.expandvars(consumer_path)))
@@ -88,7 +126,8 @@ def main():
     elif opts.sink == 'print':
         sink = slurp.print_sink
 
-    conf = slurp.Conf(
+    create_conf = functools.partial(
+        slurp.Conf,
         opts.state_path,
         consumer_paths,
         not opts.disable_locking,
@@ -98,27 +137,44 @@ def main():
         opts.batch_size)
 
     if cmd in ('s', 'seed'):
-        slurp.seed(paths or sys.stdin, conf)
+        if opts.enable_syslog:
+            configure_syslog(log_level)
+        slurp.seed(paths or sys.stdin, create_conf())
     elif cmd in ('m', 'monitor'):
         if opts.daemonize:
+            mgr = Manager(create_conf)
             if opts.pid_file:
                 pid_file = PIDLockFile(opts.pid_file)
             else:
                 pid_file = None
-
-            # FIXME: if we dont do this pynotify will peg cpu. need to figure
-            # out which fds to preserve.
-            max_fd = get_maximum_file_descriptors()
-            files_preserve = range(max_fd)
-
             with DaemonContext(
                     pidfile=pid_file,
-                    files_preserve=files_preserve):
-                slurp.monitor(paths, conf)
+                    files_preserve=[],
+                    signal_map={
+                        signal.SIGHUP: mgr.on_reload,
+                        signal.SIGTERM: mgr.on_terminate,
+                        }):
+                if opts.enable_syslog:
+                    configure_syslog()
+                try:
+                    while True:
+                        try:
+                            slurp.monitor(paths, mgr.conf)
+                        except Manager.Reload:
+                            continue
+                        except Manager.Terminate:
+                            break
+                except Exception, ex:
+                    logger.exception(ex)
+                    raise
         else:
-            slurp.monitor(paths or sys.stdin, conf)
+            if opts.enable_syslog:
+                configure_syslog()
+            slurp.monitor(paths or sys.stdin, create_conf())
     elif cmd in ('e', 'eat'):
-        slurp.eat(paths or sys.stdin, conf)
+        if opts.enable_syslog:
+            configure_syslog()
+        slurp.eat(paths or sys.stdin, create_conf())
 
 
 if __name__ == '__main__':

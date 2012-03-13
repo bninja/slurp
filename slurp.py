@@ -487,19 +487,19 @@ class MonitorEvent(pyinotify.ProcessEvent):
                 consumer.untrack_dir(event.pathname)
 
 
-def monitor(paths, conf):
+def monitor(paths, conf, callback=None):
     mask = pyinotify.ALL_EVENTS
     wm = pyinotify.WatchManager()
     for path in paths:
         path = path.strip()
         wm.add_watch(path, mask, rec=True, auto_add=True)
-        logger.debug('monitoring %s', path)
+        logger.info('monitoring %s', path)
         seed([path], conf)  # TODO: allow disable?
         eat([path], conf)  # TODO: allow disable?
     notifier = pyinotify.Notifier(wm, default_proc_fun=MonitorEvent(conf))
-    logger.debug('enter notification loop')
-    notifier.loop()
-    logger.debug('exit notification loop')
+    logger.info('enter notification loop')
+    notifier.loop(callback=callback)
+    logger.info('exit notification loop')
 
 
 def eat(paths, conf):

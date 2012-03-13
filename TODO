@@ -1,4 +1,1 @@
-- figure out which pynotify fds should be preserved when daemonizing.
-- hup handler for conf reload when daemonized (this should reload consumer code too)
 - allow ||-ized monitoring (e.g. map paths, consumers to a tag and use 1 worker for that tag, no tag uses default worker)
-- need contrib/examples.py
