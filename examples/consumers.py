@@ -6,7 +6,6 @@ import logging
 import os
 import re
 
-from pyes import ES
 import slurp
 
 
@@ -35,7 +34,6 @@ class AccessParser(slurp.EventParser):
     MONTHS = dict((calendar.month_abbr[i], i) for i in range(1, 12))
 
     def __call__(self, src_file, offset_b, offset_e, raw):
-        host = src_file.rsplit(os.path.sep, 3)[-3]
         tag = os.path.splitext(os.path.basename(src_file))[0]
         match = self.RE.match(raw)
         if not match:
@@ -67,7 +65,6 @@ class AccessParser(slurp.EventParser):
             'offset_b': offset_b,
             'offset_e': offset_e,
             'tag': tag,
-            'host': host,
             'severity': severity,
             'timestamp': timestamp,
             'payload': {
@@ -105,7 +102,6 @@ class ErrorParser(slurp.EventParser):
     BLOCK_PREAMBLE_RE = re.compile(BLOCK_PREAMBLE_PATTERN)
 
     def __call__(self, src_file, offset_b, offset_e, raw):
-        host = src_file.rsplit(os.path.sep, 3)[-3]
         tag = os.path.splitext(os.path.basename(src_file))[0]
         match = self.RE.match(raw)
         if not match:
@@ -124,7 +120,6 @@ class ErrorParser(slurp.EventParser):
             'offset_b': offset_b,
             'offset_e': offset_e,
             'tag': tag,
-            'host': host,
             'severity': match.group('severity').lower(),
             'timestamp': timestamp,
             'payload': {
@@ -156,7 +151,6 @@ class SyslogParser(slurp.EventParser):
     BLOCK_PREAMBLE_RE = re.compile(BLOCK_PREAMBLE_PATTERN)
 
     def __call__(self, src_file, offset_b, offset_e, raw):
-        host = src_file.rsplit(os.path.sep, 3)[-3]
         tag = os.path.splitext(os.path.basename(src_file))[0]
         match = self.RE.match(raw)
         if not match:
@@ -177,7 +171,6 @@ class SyslogParser(slurp.EventParser):
             'offset_b': offset_b,
             'offset_e': offset_e,
             'tag': tag,
-            'host': host,
             'severity': match.group('severity').lower(),
             'timestamp': timestamp,
             'payload': {
@@ -202,6 +195,7 @@ class SyslogJSONParser(SyslogParser):
 
 class ElasticSearchSink(object):
     def __init__(self, server, index, type):
+        from pyes import ES
         self.cxn = ES(server)
         self.index = index
         self.type = type
@@ -224,12 +218,11 @@ CONSUMERS = [
     {'name': 'app-access',
      'block_terminal': AccessParser.BLOCK_TERMINAL,
      'event_parser': AccessParser(),
-     'event_sink': ElasticSearchSink(
-         ELASTIC_SEARCH_SERVER, 'logs', 'http_access'),
+     'event_sink': slurp.print_sink,
      'batch_size': 256,
      'backfill': False,
      'patterns': [
-         re.compile(fnmatch.translate('*/myapp-access*')),
+         re.compile(fnmatch.translate('*access.log*')),
          ],
      },
 
@@ -238,11 +231,10 @@ CONSUMERS = [
      'block_preamble': ErrorParser.BLOCK_PREAMBLE_RE,
      'block_terminal': ErrorParser.BLOCK_TERMINAL,
      'event_parser': ErrorParser(),
-     'event_sink': ElasticSearchSink(
-         ELASTIC_SEARCH_SERVER, 'logs', 'application'),
+     'event_sink': slurp.print_sink,
      'backfill': True,
      'patterns': [
-         re.compile(fnmatch.translate('*/myapp-errors*')),
+         re.compile(fnmatch.translate('*errors.log*')),
          ],
      },
 
@@ -251,11 +243,10 @@ CONSUMERS = [
      'block_preamble': SyslogJSONParser.BLOCK_PREAMBLE_RE,
      'block_terminal': SyslogJSONParser.BLOCK_TERMINAL,
      'event_parser': SyslogJSONParser(),
-     'event_sink': ElasticSearchSink(
-         ELASTIC_SEARCH_SERVER, 'logs', 'application_request'),
+     'event_sink': slurp.print_sink,
      'backfill': True,
      'patterns': [
-         re.compile(fnmatch.translate('*/myapp-requests*')),
+         re.compile(fnmatch.translate('*requests.log*')),
          ],
      },
 
@@ -264,8 +255,7 @@ CONSUMERS = [
      'block_preamble': SyslogParser.BLOCK_PREAMBLE_RE,
      'block_terminal': SyslogParser.BLOCK_TERMINAL,
      'event_parser': SyslogParser(),
-     'event_sink': ElasticSearchSink(
-         ELASTIC_SEARCH_SERVER, 'logs', 'system'),
+     'event_sink': slurp.print_sink,
      'batch_size': 4096,
      'backfill': False,
      'patterns': [

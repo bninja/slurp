@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+"""
+Script used to slurp (seed, eat or monitor) logs. You can also use it as a
+daemon monitor. For an example init script wrapping the daemon monitor as a
+service see contrib/slurp.
+
+See --help for usage.
+"""
 from __future__ import with_statement
 import functools
 import logging
@@ -41,11 +48,21 @@ def configure_syslog():
 
 
 class Manager():
+    """
+    Used to manage the monitor in daemon mode.
+    """
+
     class Reload(Exception):
+        """
+        Raised to reload the configuration.
+        """
         pass
 
 
     class Terminate(Exception):
+        """
+        Raised to gracefully terminate.
+        """
         pass
 
     
@@ -59,6 +76,13 @@ class Manager():
             logger.info('creating configuration')
             self._conf = self.create_conf() 
         return self._conf
+
+    @property
+    def signal_map(self):
+        return {
+            signal.SIGHUP: self.on_reload,
+            signal.SIGTERM: self.on_terminate,
+            }
     
     def on_reload(self, signum, frame):
         logger.info('reloading')
@@ -68,10 +92,21 @@ class Manager():
     def on_terminate(self, signum, frame):
         logger.info('terminating')
         raise self.Terminate()
+    
+    def loop(self):
+        while True:
+            try:
+                slurp.monitor(paths, mgr.conf)
+            except Manager.Reload:
+                continue
+            except Manager.Terminate:
+                break
 
 
 def main():
-    opt_parser = OptionParser(usage="""
+    opt_parser = OptionParser(
+        version=slurp.__version__,
+        usage="""
 %prog s|seed path-1 .. path-n [options]
 %prog m|monitor path-1 .. path-n [options]
 %prog e|eat path-1 .. path-n [options]\
@@ -126,6 +161,7 @@ def main():
     elif opts.sink == 'print':
         sink = slurp.print_sink
 
+    # NOTE: intentionally deferred
     create_conf = functools.partial(
         slurp.Conf,
         opts.state_path,
@@ -137,6 +173,7 @@ def main():
         opts.batch_size)
 
     if cmd in ('s', 'seed'):
+        # NOTE: intentionally deferred 
         if opts.enable_syslog:
             configure_syslog(log_level)
         slurp.seed(paths or sys.stdin, create_conf())
@@ -150,28 +187,22 @@ def main():
             with DaemonContext(
                     pidfile=pid_file,
                     files_preserve=[],
-                    signal_map={
-                        signal.SIGHUP: mgr.on_reload,
-                        signal.SIGTERM: mgr.on_terminate,
-                        }):
+                    signal_map=mgr.signal_map):
+                # NOTE: intentionally deferred
                 if opts.enable_syslog:
                     configure_syslog()
                 try:
-                    while True:
-                        try:
-                            slurp.monitor(paths, mgr.conf)
-                        except Manager.Reload:
-                            continue
-                        except Manager.Terminate:
-                            break
+                    manager.loop()
                 except Exception, ex:
                     logger.exception(ex)
                     raise
         else:
+            # NOTE: intentionally deferred
             if opts.enable_syslog:
                 configure_syslog()
             slurp.monitor(paths or sys.stdin, create_conf())
     elif cmd in ('e', 'eat'):
+        # NOTE: intentionally deferred
         if opts.enable_syslog:
             configure_syslog()
         slurp.eat(paths or sys.stdin, create_conf())
