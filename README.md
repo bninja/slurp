@@ -46,7 +46,7 @@ Slurp has both programming and command-line interfaces.
 
 To use the programming interface import it and read doc strings:
 
-```python
+```bash
 $ python
 >>> import slurp
 ```
@@ -114,6 +114,6 @@ $ mkvirtualenv slurp
 ```
 
 ```bash
-$ cd ~/code/slurp/examples
-$ ../slurp eat access.log -c consumers.py --disable-locking --disable-tracking
+(slurp)$ cd ~/code/slurp/examples
+(slurp)$ ../slurp eat access.log -c consumers.py --disable-locking --disable-tracking
 ```
