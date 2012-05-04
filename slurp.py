@@ -8,9 +8,9 @@ command line access use the accompanying slurp script.
 The specification for:
     - what files to consider
     - how to identify raw "entry" strings in them
-    - how to parse those "entries" to something structured
+    - how to parse those "entries" into something structured
     - where to send those parsed entries
-is all encapsulatd by something called a "consumer". Consumers are just
+is all encapsulated by something called a "consumer". Consumers are just
 dictionaries defined in some python file. Here is an example:
 
     CONSUMERS = [
@@ -34,7 +34,7 @@ dictionaries defined in some python file. Here is an example:
          },
         ]
 
-For more examples of of consumers see contrib/examples.py.
+For more examples of consumers see contrib/examples.py.
 
 Once you have these consumers defined you create a `Conf` object, passing
 the path to the file with your consumers, and then either `seed`, `monitor` or
@@ -159,7 +159,13 @@ class Conf(object):
 
     def _import_consumers(self, file_path):
         logger.debug('loading consumers from %s', file_path)
-        return imp.load_source('', file_path).CONSUMERS
+        dir_path = os.path.dirname(file_path)
+        name = os.path.basename(file_path).rpartition('.')[0]
+        module = imp.load_module(name, *imp.find_module(name, [dir_path]))
+        if not hasattr(module, 'CONSUMERS'):
+            logger.info('%s has not attribute CONSUMERS, skipping', file_path)
+            return []
+        return module.CONSUMERS
 
     def _create_consumer(self, **kwargs):
         logger.debug('creating consumer %s:\n%s',
