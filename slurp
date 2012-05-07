@@ -93,10 +93,10 @@ class Manager():
         logger.info('terminating')
         raise self.Terminate()
     
-    def loop(self):
+    def loop(self, paths):
         while True:
             try:
-                slurp.monitor(paths, mgr.conf)
+                slurp.monitor(paths, self.conf)
             except Manager.Reload:
                 continue
             except Manager.Terminate:
@@ -192,7 +192,7 @@ def main():
                 if opts.enable_syslog:
                     configure_syslog()
                 try:
-                    manager.loop()
+                    mgr.loop()
                 except Exception, ex:
                     logger.exception(ex)
                     raise

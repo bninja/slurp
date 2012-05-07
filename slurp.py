@@ -773,13 +773,13 @@ def monitor(paths, conf, callback=None):
     """
     mask = pyinotify.ALL_EVENTS
     wm = pyinotify.WatchManager()
+    notifier = pyinotify.Notifier(wm, default_proc_fun=MonitorEvent(conf))
     for path in paths:
         path = path.strip()
         wm.add_watch(path, mask, rec=True, auto_add=True)
         logger.info('monitoring %s', path)
         seed([path], conf)  # TODO: allow disable?
         eat([path], conf)  # TODO: allow disable?
-    notifier = pyinotify.Notifier(wm, default_proc_fun=MonitorEvent(conf))
     logger.info('enter notification loop')
     notifier.loop(callback=callback)
     logger.info('exit notification loop')
