@@ -37,8 +37,8 @@ dictionaries defined in some python file. Here is an example:
 For more examples of consumers see contrib/examples.py.
 
 Once you have these consumers defined you create a `Conf` object, passing
-the path to the file with your consumers, and then either `seed`, `monitor` or
-`eat` some log files:
+the path to the file with your consumer(s), and then either `seed`, `monitor`
+or `eat` some log files:
 
     conf = Conf(
         state_path='/home/me/.slurp/state',
@@ -252,7 +252,7 @@ class Consumer(object):
     `backfill`
         Flag indicating whether `seed` should consume all pre-existing log
         file entries (i.e. tracking offset should be 0) or skipped (i.e.
-        tracking offset should be set to the end of file). If defaults to True.
+        tracking offset should be set to the end of file). It defaults to True.
 
     `batch_size`
         Number of events (i.e. parsed log entries) to send to `event_sink` at
@@ -677,6 +677,30 @@ class EventSink(object):
     """
     def __call__(self, event):
         raise NotImplementedError()
+    
+    
+class EventFilter(slurp.EventSink):
+    """
+    Filtering event sink. Events for which _filter evaluates to True are
+    passed along to `sink`, all others are dropped.
+
+    `sink`
+        An event sink to pass filtered (i.e. _filter(event) == True) events to.
+    """
+
+    def __init__(self, sink):
+        self.sink = sink
+
+    def _filter(self, event):
+        raise NotImplementedError()
+    
+    def __call__(self, event):
+        if isinstance(event, list):
+            event = filter(self._filter, event)
+        else:
+            event = event if self._filter(event) else None
+        if event:
+            self.sink(event)
 
 
 def print_sink(event):
@@ -718,7 +742,7 @@ class MonitorEvent(pyinotify.ProcessEvent):
     """
     A pyinotify event fired when something being monitored changes (e.g. file
     in a monitored dictionary is created, monitored file is deleted, monitored
-    file is modified).
+    file is modified, etc).
 
     :param conf: Instance of `Conf`.
     """
@@ -766,7 +790,7 @@ def monitor(paths, conf, callback=None):
     consumers which react to the change accordingly (e.g. eat newly appended
     entries, etc).
 
-    :param paths: Paths to dictionaries and file to monitor.
+    :param paths: Paths to dictionaries and files to monitor.
     :param conf: Instance of `Conf`.
     :param callback: Callable predicate used to terminate notification loop.
                      See pyinotify.Notifier for details.
