@@ -679,7 +679,7 @@ class EventSink(object):
         raise NotImplementedError()
     
     
-class EventFilter(slurp.EventSink):
+class EventFilter(EventSink):
     """
     Filtering event sink. Events for which _filter evaluates to True are
     passed along to `sink`, all others are dropped.
