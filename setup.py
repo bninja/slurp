@@ -1,23 +1,39 @@
-from setuptools import setup
+import re
 
-
-__version__ = '0.0.2'
+try:
+    import setuptools
+except ImportError:
+    import distutils.core
+    setup = distutils.core.setup
+else:
+    setup = setuptools.setup
 
 
 setup(
     name='slurp',
-    version=__version__,
+    version=(re
+        .compile(r".*__version__ = '(.*?)'", re.S)
+        .match(open('slurp.py').read())
+        .group(1)),
     description='Log file slurper',
-    author='noone',
-    author_email='noone@nowhere.com',
+    long_description=(
+        open('README.rst').read() + '\n\n' +
+        open('HISTORY.rst').read()
+        ),
     url='https://github.com/bninja/slurp',
-    keywords=[
-        'slurp',
-        ],
+    author='slurp',
+    author_email='slurp@tbd.com',
     install_requires=[
         'lockfile==0.9.1',
         'pyinotify==0.9.3',
         'python-daemon==1.6',
+        'setproctitle==1.1.6',
+        ],
+    extras_require={
+        },
+    tests_require=[
+        'nose==1.1.2',
+        'mock==0.8',
         ],
     py_modules=[
         'slurp',
@@ -25,15 +41,14 @@ setup(
     scripts=[
         'slurp',
         ],
+    package_data={'': ['LICENSE']},
+    include_package_data=True,
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License',
-        'Operating System :: OS Independent',
+        'Natural Language :: English',
+        'License :: OSI Approved :: ISC License (ISCL)',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 2.5',
-        'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
-        'Topic :: Software Development :: Libraries :: Python Modules',
         ],
     )

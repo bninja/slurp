@@ -1,0 +1,7 @@
+language: python
+python:
+  - 2.7
+script: nosetests 
+install:
+  - pip install nose mock==0.8 --use-mirrors
+  - pip install . --use-mirrors

@@ -70,12 +70,14 @@ from lockfile import FileLock
 import logging
 import os
 import pprint
+import shutil
+import tempfile
 import time
 
 import pyinotify
 
 
-__version__ = '0.0.1'
+__version__ = '0.1'
 
 logger = logging.getLogger(__name__)
 
@@ -120,13 +122,18 @@ class Conf(object):
         Override defining the number of events (i.e. parsed log entries) to
         send to an event sink at once. If None then the batch_size defined by
         the consumer is used.
+
+    `disable_backfill`
+        Override consumer backfill to False. If True then override otherwise
+        the `backfill` by the consumer is used. Defaults to False.
     """
     def __init__(self,
             state_path, consumer_paths,
             locking, lock_timeout,
             tracking,
             event_sink,
-            batch_size):
+            batch_size,
+            disable_backfill=False):
         self.state_path = state_path
         self.lock_class = FileLock if locking else DummyLock
         self.lock_timeout = lock_timeout
@@ -134,6 +141,7 @@ class Conf(object):
         self.event_sink = event_sink
         self.batch_size = batch_size
         self.consumers = self._load_consumers(consumer_paths)
+        self.disable_backfill = disable_backfill
 
     def _load_consumers(self, paths):
         consumers = []
@@ -194,6 +202,10 @@ class Conf(object):
             logger.debug('overriding consumer %s batch size to %s',
                 kwargs['name'], self.batch_size)
             kwargs['batch_size'] = self.batch_size
+        if self.disable_backfill:
+            logger.debug('overriding consumer %s backfill to %s',
+                kwargs['name'], False)
+            kwargs['backfill'] = False
         return patterns, Consumer(**kwargs)
 
     def get_matching_consumers(self, file_path):
@@ -205,6 +217,16 @@ class Conf(object):
                         file_path, consumer.name, pattern.pattern)
                     consumers.append(consumer)
         return consumers
+
+    def get_consumer_groups(self):
+        return list(set(consumer.group for _, consumer in self.consumers))
+
+    def filter_consumers(self, groups):
+        self.consumers = [
+            (patterns, consumer)
+            for patterns, consumer in self.consumers
+            if consumer.group in groups
+            ]
 
 
 class Consumer(object):
@@ -257,6 +279,11 @@ class Consumer(object):
     `batch_size`
         Number of events (i.e. parsed log entries) to send to `event_sink` at
         once. It defaults to None which means no batching.
+
+    `group`
+        Name of the 'group' this consumer is associated with. This is used when
+        grouping consumers (e.g. when deciding which monitor worker includes
+        the consumer). Defaults to 'default'.
     """
     def __init__(self,
             name,
@@ -264,7 +291,8 @@ class Consumer(object):
             tracker,
             lock, lock_timeout=None,
             backfill=True,
-            batch_size=None):
+            batch_size=None,
+            group='default'):
         self.name = name
         self.block_parser = block_parser
         self.event_parser = event_parser
@@ -274,6 +302,7 @@ class Consumer(object):
         self.lock_timeout = lock_timeout
         self.backfill = backfill
         self.batch_size = batch_size
+        self.group = group
 
     def seed(self, file_path):
         if self.tracker.has(file_path):
@@ -297,14 +326,7 @@ class Consumer(object):
         logger.debug('locked %s with timeout %s',
             self.lock.lock_file, self.lock_timeout)
         try:
-            if not self.tracker.has(file_path):
-                if self.backfill:
-                    offset = 0
-                else:
-                    with open(file_path, 'r') as fo:
-                        fo.seek(0, os.SEEK_END)
-                        offset = fo.tell()
-                self.tracker.add(file_path, offset)
+            self.seed(file_path)
             offset = self.tracker.get(file_path)
             try:
                 st = time.time()
@@ -414,16 +436,28 @@ class Tracker(object):
         if os.path.isfile(self.file_path):
             logger.debug('loading tracking data from %s', self.file_path)
             with open(self.file_path, 'r') as fo:
-                raw = fo.read()
-                self.file_offsets = json.loads(raw)
+                raw = fo.read().strip()
+                if raw:
+                    self.file_offsets = json.loads(raw)
+                else:
+                    self.file_offsets = {}
         else:
             logger.debug('not tracking data %s', self.file_path)
             self.file_offsets = {}
 
     def save(self):
-        logger.debug('saving tracking data to %s', self.file_path)
-        with open(self.file_path, 'w') as fo:
-            fo.write(json.dumps(self.file_offsets))
+        tmp_fd, tmp_name = tempfile.mkstemp(suffix='track', prefix='slurp')
+        tmp_fo = os.fdopen(tmp_fd, 'w')
+        try:
+            logger.debug('saving tracking data to %s', tmp_name)
+            tmp_fo.write(json.dumps(self.file_offsets))
+            logger.debug('moving tracking data to from %s to %s',
+                tmp_name, self.file_path)
+            shutil.move(tmp_name, self.file_path)
+        finally:
+            tmp_fo.close()
+            if os.path.isfile(tmp_name):
+                os.remove(tmp_name)
 
     def add(self, file_path, offset=0):
         logger.info('tracking add %s offset %s', file_path, offset)
@@ -540,7 +574,7 @@ class BlockIterator(object):
         raise StopIteration()
 
     def _parse(self, eof):
-        raise NotImplemetedError()
+        raise NotImplementedError()
 
 
 class LineIterator(BlockIterator):
@@ -677,8 +711,8 @@ class EventSink(object):
     """
     def __call__(self, event):
         raise NotImplementedError()
-    
-    
+
+
 class EventFilter(EventSink):
     """
     Filtering event sink. Events for which _filter evaluates to True are
@@ -693,7 +727,7 @@ class EventFilter(EventSink):
 
     def _filter(self, event):
         raise NotImplementedError()
-    
+
     def __call__(self, event):
         if isinstance(event, list):
             event = filter(self._filter, event)
