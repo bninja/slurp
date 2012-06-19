@@ -188,7 +188,7 @@ class SyslogJSONParser(SyslogParser):
     RE = re.compile(SyslogParser.PATTERN, flags=re.DOTALL)
 
     def __call__(self, src_file, offset_b, offset_e, raw):
-        event = super(RequestParser, self).__call__(src_file, offset_b, offset_e, raw)
+        event = super(SyslogJSONParser, self).__call__(src_file, offset_b, offset_e, raw)
         event['payload']['message'] = json.loads(event['payload']['message'])
         return event
 

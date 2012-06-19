@@ -77,7 +77,7 @@ import time
 import pyinotify
 
 
-__version__ = '0.2'
+__version__ = '0.3'
 
 logger = logging.getLogger(__name__)
 
@@ -140,8 +140,8 @@ class Conf(object):
         self.tracker_class = Tracker if tracking else DummyTracker
         self.event_sink = event_sink
         self.batch_size = batch_size
-        self.consumers = self._load_consumers(consumer_paths)
         self.disable_backfill = disable_backfill
+        self.consumers = self._load_consumers(consumer_paths)
 
     def _load_consumers(self, paths):
         consumers = []
