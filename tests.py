@@ -17,6 +17,13 @@ TMP_PATH = tempfile.gettempdir()
 
 TestCase = unittest.TestCase
 
+if not hasattr(TestCase, 'assertDictEqual'):
+    def assertItemsEqual(self, a, b):
+        self.assertEqual(sorted(a), sorted(b))
+
+    TestCase.assertDictEqual = TestCase.assertEqual
+    TestCase.assertItemsEqual = assertItemsEqual
+
 
 class TestConf(TestCase):
 
