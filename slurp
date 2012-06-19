@@ -75,14 +75,13 @@ class Monitor(object):
 
     def __init__(self, create_conf):
         self.create_conf = create_conf
+        self._conf = None
 
     @property
     def conf(self):
         if not self._conf:
             logger.info('creating configuration')
             self._conf = self.create_conf()
-            if self.groups is not None:
-                self._conf.filter_consumers(self.groups)
         return self._conf
 
     @property
