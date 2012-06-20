@@ -109,7 +109,7 @@ class Monitor(object):
             except Monitor.Terminate:
                 break
 
-    def reload(self, signum, frame):
+    def reload(self):
         logger.info('reloading')
         self._conf = None
 
@@ -143,6 +143,14 @@ class MonitorWorker(Monitor):
         super(MonitorWorker, self).__init__(create_conf)
         self._conf = conf
         self.groups = groups
+        
+    @property
+    def signal_map(self):
+        signal_map = super(MonitorWorker, self).signal_map
+        signal_map.update({
+            signal.SIGINT: self.handle_term,
+            })
+        return signal_map
 
     @property
     def conf(self):
@@ -181,9 +189,10 @@ class MonitorMaster(object):
             try:
                 os.kill(self.pid, sig)
             except OSError, e:
-                if e.errno == errno.ESRCH:
-                    self.pid = None
-                raise
+                if e.errno != errno.ESRCH:
+                    raise
+                self.pid = None
+
 
     def __init__(self, create_conf):
         self.create_conf = create_conf
@@ -244,7 +253,7 @@ class MonitorMaster(object):
                 if not sig:
                     self.sleep()
                     continue
-                signal_handler = self.getattr(self, 'handle_' + sig, None)
+                signal_handler = getattr(self, 'handle_' + str(sig), None)
                 if not signal_handler:
                     logger.warning('ignoring unhandled signal "%s"',
                         SIGNALS[sig])
@@ -307,9 +316,9 @@ class MonitorMaster(object):
                 self.workers.pop(worker.name)
             else:
                 if worker.fail_count > self.max_fail_count:
-                    self._kill_worker(worker, signal.SIGKILL)
+                    worker.kill(signal.SIGKILL)
                 else:
-                    self._kill_worker(worker, signal.SIGTERM)
+                    worker.kill(signal.SIGTERM)
 
         # reap dead workers
         self.reap_workers()
@@ -323,20 +332,22 @@ class MonitorMaster(object):
     def spawn_worker(self, worker, paths):
         # fork
         pid = os.fork()
-        if pid:
+        if pid != 0:
+            # parent
             worker.pid = pid
             return
-
-        # clear signals
-        for sig in SIGNALS.iterkeys():
-            signal.signal(sig, signal.SIG_DFL)
-
-        # title
-        if setproctitle:
-            setproctitle('slurp: worker[{}]'.format(worker.name))
-
-        # loop
+        
+        # child
         try:
+            # clear signals
+            for sig in SIGNALS.iterkeys():
+                signal.signal(sig, signal.SIG_DFL)
+    
+            # title
+            if setproctitle:
+                setproctitle('slurp: worker[{}]'.format(worker.name))
+    
+            # loop            
             self.conf.filter_consumers([worker.name])
             monitor = MonitorWorker(self.create_conf, [worker.name], self.conf)
             for sig, handler in monitor.signal_map.iteritems():
@@ -344,8 +355,8 @@ class MonitorMaster(object):
             monitor.run(paths)
         except Exception, ex:
             logger.exception(ex)
-            sys.exit(1)
-        sys.exit(0)
+            os._exit(1)
+        os._exit(0)
 
     def reap_workers(self):
         try:
@@ -370,18 +381,21 @@ class MonitorMaster(object):
                         logger.error(
                             '%s worker fail count %s >= max fail count %s',
                             worker.name, worker.fail_count, self.max_fail_count)
+                else:
+                    logger.info('%s worker %s exited', worker.name, worker.pid)
                 worker.pid = None
         except OSError, e:
             if e.errno == errno.ECHILD:
-                pass
+                return
+            raise
 
     def kill_workers(self, sig):
         count = 0
         logger.info('sending signal "%s" to all workers', SIGNALS[sig])
         for worker in self.workers.itervalues():
             if worker.pid is not None:
-                count += 1
                 worker.kill(sig)
+                count += 1
         return count
 
     def reload(self):

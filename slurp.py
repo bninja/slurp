@@ -66,7 +66,7 @@ import functools
 import glob
 import imp
 import json
-from lockfile import FileLock
+from lockfile import FileLock, LockTimeout
 import logging
 import os
 import pprint
@@ -136,7 +136,7 @@ class Conf(object):
             disable_backfill=False):
         self.state_path = state_path
         self.lock_class = FileLock if locking else DummyLock
-        self.lock_timeout = lock_timeout
+        self.lock_timeout = lock_timeout or None
         self.tracker_class = Tracker if tracking else DummyTracker
         self.event_sink = event_sink
         self.batch_size = batch_size
@@ -322,7 +322,12 @@ class Consumer(object):
     def eat(self, file_path):
         logger.debug('locking %s with timeout %s',
             self.lock.lock_file, self.lock_timeout)
-        self.lock.acquire(self.lock_timeout)
+        try:
+            self.lock.acquire(self.lock_timeout)
+        except LockTimeout:
+            logger.critical('lock %s acquire reached timeout %s',
+                self.lock.lock_file, self.lock_timeout)
+            raise
         logger.debug('locked %s with timeout %s',
             self.lock.lock_file, self.lock_timeout)
         try:
@@ -434,7 +439,7 @@ class Tracker(object):
 
     def load(self):
         if os.path.isfile(self.file_path):
-            logger.debug('loading tracking data from %s', self.file_path)
+            logger.info('loading tracking data from %s', self.file_path)
             with open(self.file_path, 'r') as fo:
                 raw = fo.read().strip()
                 if raw:
@@ -450,7 +455,7 @@ class Tracker(object):
         tmp_fo = os.fdopen(tmp_fd, 'w')
         try:
             logger.debug('saving tracking data to %s', tmp_name)
-            tmp_fo.write(json.dumps(self.file_offsets))
+            tmp_fo.write(json.dumps(self.file_offsets, indent=4))
             logger.debug('moving tracking data to from %s to %s',
                 tmp_name, self.file_path)
             shutil.move(tmp_name, self.file_path)
@@ -859,5 +864,4 @@ def eat(paths, conf):
                 logger.debug('%s eating file %s', consumer.name, file_path)
                 consumer.eat(file_path)
                 num_consumed += 1
-            if not num_consumed:
-                logger.info('no consumers for file %s', file_path)
+
