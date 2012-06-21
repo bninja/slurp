@@ -66,7 +66,7 @@ import functools
 import glob
 import imp
 import json
-from lockfile import FileLock, LockTimeout
+import lockfile
 import logging
 import os
 import pprint
@@ -102,7 +102,7 @@ class Conf(object):
 
     `locking`
         A flag indicating whether to perform locking or not. If locking is
-        enabled then all consumer actions (i.e. `seed`, `eat`) as serialized.
+        enabled then all consumer actions (i.e. `seed`, `eat`) are serialized.
 
     `lock_timeout`
         If locking is enabled this is the timeout in seconds to wait for a
@@ -324,7 +324,7 @@ class Consumer(object):
             self.lock.lock_file, self.lock_timeout)
         try:
             self.lock.acquire(self.lock_timeout)
-        except LockTimeout:
+        except self.lock.Timeout:
             logger.critical('lock %s acquire reached timeout %s',
                 self.lock.lock_file, self.lock_timeout)
             raise
@@ -491,6 +491,30 @@ class Tracker(object):
                 self.remove(file_path)
 
 
+class FileLock():
+    """
+    A file lock.
+
+    `file_path`
+        Path to file to lock.
+    """
+
+    Timeout = lockfile.LockTimeout
+
+    def __init__(self, file_path):
+        self.lock_file = file_path
+        self._lock = None
+
+    def acquire(self, timeout=None):
+        lock = lockfile.FileLock(self.lock_file)
+        lock.acquire(timeout=timeout)
+        self._lock = lock
+
+    def release(self):
+        self._lock.release()
+        self._lock = None
+
+
 class DummyLock(object):
     """
     A dummy lock.
@@ -569,13 +593,6 @@ class BlockIterator(object):
                 continue
             raw, offset_b, offset_e = result
             return raw, offset_b, offset_e
-        if self.buffer:
-            if self.strict:
-                raise ValueError('%s[%s:] is partial block',
-                    self.fo.name, self.pos)
-            else:
-                logger.warning('%s[%s:] is partial block, discarding',
-                    self.fo.name, self.pos)
         raise StopIteration()
 
     def _parse(self, eof):
@@ -664,13 +681,6 @@ class MultiLineIterator(BlockIterator):
                 return None
             suffix = self.buffer[-len(self.terminal):]
             if suffix != self.terminal:
-                if self.strict:
-                    raise ValueError('%s[%s:%s] is partial block',
-                        self.fo.name, self.pos, self.pos + len(self.buffer))
-                logger.warning('%s[%s:%s] is partial block, discarding',
-                    self.fo.name, self.pos, self.pos + len(self.buffer))
-                self.pos += len(self.buffer)
-                self.buffer = ''
                 return None
             logger.debug('%s[%s:] hit', self.fo.name, self.pos)
             raw = self.buffer
@@ -864,4 +874,3 @@ def eat(paths, conf):
                 logger.debug('%s eating file %s', consumer.name, file_path)
                 consumer.eat(file_path)
                 num_consumed += 1
-
