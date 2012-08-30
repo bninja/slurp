@@ -2,35 +2,44 @@
 slurp
 =====
 
-.. image:: https://secure.travis-ci.org/bninja/slurp.png?branch=master
+.. image:: https://secure.travis-ci.org/bninja/slurp.png?branch=dev
+    :target: http://travis-ci.org/bninja/slurp
 
-Slurp iterates over "entries" in log files (sources), parsed them into
-something structured and passes them along to something else (sinks). A log
+slurp is a block parser. It iterates over "entries" in append only sources
+(aka files) and sends them along to a sink for further processing. A source
 file is something that:
 
 - is created
-- has strings appended to it
+- has uniformly delimited strings appended to it
 - is then possibly deleted.
 
-If a file does not conform to this lifestyle it is not suitable for use with
-slurp.
+If a file does not conform to this lifestyle it is not suitable as a slurp source.
 
-In the slurp world files are mapped to consumers which are python dictionaries
-describing:
+In the slurp world sources are mapped to channels. Channels:
 
-- what files are associated with the consumer
-- how to identify raw "entry" strings in them
-- how to parse those "entries" to something structured
-- where to send those parsed entries
+- have once or more sources associates with them
+- can tweak source parsing bahvior (e.g. struct, read size, etc)
+- has a single sink  
+- controls sink throttling (e.g. if a sink fails or takes a long time)
 
 The motivating use-case for slurp is feeding entries streamed to centralized
 syslog spool(s) to elastic search and other data mining tools.
 
+Issues
+------
+
+Please use tagged github `issues <https://github.com/bninja/slurp/issues>`_ to request features or report bugs.
+
 Dependencies
 ------------
 
+Required:
+
 - `Python <http://python.org/>`_ >= 2.5, < 3.0
 - `pyinotify <https://github.com/seb-m/pyinotify>`_ >= 0.9.3
+
+Optional:
+
 - `lockfile <http://code.google.com/p/pylockfile/>`_  >= 1.9
 - `python-daemon <pypi.python.org/pypi/python-daemon/>`_ >= 1.5
 
@@ -46,7 +55,7 @@ or if you prefer::
     $ easy_install slurp
 
 Usage
-=====
+-----
 
 Slurp has both programming and command-line interfaces.
 
@@ -58,63 +67,30 @@ To use the programming interface import it and read doc strings::
 To use the command-line interface run the slurp script::
 
     $ slurp --help
-    Usage: 
-    slurp s|seed path-1 .. path-n [options]
-    slurp m|monitor path-1 .. path-n [options]
-    slurp e|eat path-1 .. path-n [options]
-    
-    Options:
-      -h, --help            show this help message and exit
-      -s STATE_PATH, --state-path=STATE_PATH
-      -c CONSUMERS, --consumer=CONSUMERS
-      -l LOG_LEVEL, --log-level=LOG_LEVEL
-      --enable-syslog       
-      --disable-stderrlog   
-      -d, --daemonize       
-      --disable-locking     
-      --lock-timeout=LOCK_TIMEOUT
-      --disable-tracking    
-      --pid-file=PID_FILE   
-      --sink=SINK           
-      --batch-size=BATCH_SIZE
 
 Another common use case is to run the slurp script as a monitor daemon. See
 extras/slurp.init for an example init script.
 
-Seed
-----
 
-Slurp does what it does using three functions: seed, eat and monitor. Seed is
-used to initialize offset tracking information for files. These offsets tell
-slurp where to resume eating from within the file. This is automatically done
-by monitor.
+Configuration
+-------------
 
-Eat
----
+**TODO**
 
-Eat tells slurp to consume any newly added entries appended to tracked files. 
-
-Monitor
--------
-
-Monitor sets up a watch on files and directories and consumes any newly added
-entries appended in response to change events trigger by the watch. Slurp uses
-pyinotify to watch.
 
 Examples
-========
+--------
 
-Check it out::
-
-    $ cd ~/code
-    $ git checkout git://github.com/bninja/slurp.git
-    $ cd slurp
-    $ mkvirtualenv slurp
-    (slurp)$ python setup.py develop
+**TODO**
 
 
-And run the example::
+Contributing
+------------
 
-    $ workon slurp
-    (slurp)$ cd ~/code/slurp/extras
-    (slurp)$ slurp eat access.log -c example.py -l debug --disable-locking --disable-tracking
+1. Fork it
+2. Create your feature branch (`git checkout -b my-new-feature`)
+3. Write your code **and tests**
+4. Ensure all tests still pass (`nosetests -svx tests`)
+5. Commit your changes (`git commit -am 'Add some feature'`)
+6. Push to the branch (`git push origin my-new-feature`)
+7. Create new pull request

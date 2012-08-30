@@ -27,8 +27,8 @@ LOCK_FILE="/var/lock/subsys/slurp"
 CONFIG="/etc/sysconfig/slurp"
 
 MONITOR_PATHS="/var/log/messages"
-STATE_PATH="/var/lib/slurp"
-CONSUMERS="/etc/slurp.d"
+STATE_DIR="/var/lib/slurp"
+CONF_FILE="/etc/slurp/slurp.conf"
 LOG_LEVEL="info"
 
 if [ -f $CONFIG ]; then
@@ -37,8 +37,8 @@ fi
 
 OPTS="monitor \
 $MONITOR_PATHS \
---state-path=$STATE_PATH \
---consumer=$CONSUMERS \
+--state-dir=$STATE_DIR \
+--conf-file=$CONF_FILE \
 --log-level=$LOG_LEVEL \
 --daemonize --pid-file=$PID_FILE \
 --enable-syslog"

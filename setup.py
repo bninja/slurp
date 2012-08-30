@@ -13,7 +13,7 @@ setup(
     name='slurp',
     version=(re
         .compile(r".*__version__ = '(.*?)'", re.S)
-        .match(open('slurp.py').read())
+        .match(open('slurp/__init__.py').read())
         .group(1)),
     description='Log file slurper',
     long_description=(
@@ -39,7 +39,7 @@ setup(
         'slurp',
         ],
     scripts=[
-        'slurp',
+        'bin/slurp',
         ],
     package_data={'': ['LICENSE']},
     include_package_data=True,

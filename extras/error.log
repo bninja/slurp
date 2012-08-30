@@ -1,5 +1,0 @@
-123.20.14.144 - - [15/Mar/2012:00:01:38] "GET /some/endpoint/e9f065106e3111e18d640238f24fe444 HTTP/1.0" 200 658 "-" "libwww-perl/6.03"
-123.20.14.144 - - [15/Mar/2012:00:01:39] "GET /some/endpoint/6e2882186c5c11e1b91e0238f24fe444 HTTP/1.0" 200 660 "-" "libwww-perl/6.03"
-30.18.196.219 - - [15/Mar/2012:00:01:40] "GET /some/other/endpoint/4065b6a605ba11e1be011231400110e4 HTTP/1.0" 200 602 "-" "crystal/dashboard"
-33.20.14.144 - - [15/Mar/2012:00:01:40] "GET /some/endpoint/25effb606e2e11e1a92e0238f2594f01 HTTP/1.0" 200 679 "-" "libwww-perl/6.03"
-30.18.196.19 - - [15/Mar/2012:00:01:40] "GET /golden?limit=0&sid=in%2CAD5b83a5dc5cc311e1b0c00238f24fe444 HTTP/1.0" 200 412 "-" "crystal/dashboard"
