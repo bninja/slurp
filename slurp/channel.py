@@ -125,7 +125,7 @@ class Channel(object):
                     count = self.sink(blocks)
                     delta = time.time() - st
                     if count:
-                        tracker.set(self, event, blocks[count - 1][-1])
+                        tracker.set(self, event, blocks[count - 1][2])
                         num_blocks += count
                         num_bytes += sum(len(block[-1]) for blocks in blocks[:count])
                     logger.debug('channel "%s" consumed %s block(s) (%s byte(s)) in %0.4f sec(s)',
@@ -148,7 +148,7 @@ class Channel(object):
                         count = self.sink(blocks)
                         delta = time.time() - st
                         if count:
-                            tracker.set(self, event, blocks[count - 1][-1])
+                            tracker.set(self, event, blocks[count - 1][2])
                             num_blocks += count
                             num_bytes += sum(len(block[-1]) for blocks in blocks[:count])
                         logger.debug('channel "%s" consumed %s block(s) (%s byte(s)) in %0.4f sec(s)',

@@ -37,7 +37,6 @@ class Tracker(object):
             """,
             (channel.name, event.path))
         track = cur.fetchone()
-        cur.close()
         offset = track[0] if track else None
         cur.close()
         return offset
