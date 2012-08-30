@@ -35,7 +35,7 @@ def load(path, includes=None, excludes=None):
 
         ctx.sources = {}
         for section, name in _sections(ctx.parser, 'source:'):
-            source = _load_source(ctx)
+            source = _load_source(ctx, section, name)
             ctx.sources[source['name']] = source
 
         channels = []
@@ -213,7 +213,7 @@ def _load_channel(ctx, section, name):
     for source in sources:
         if source not in ctx.sources:
             raise _InvalidFieldError(
-                parser, 'sources', 'Unknown source "{}"'.format(source))
+                p, 'sources', 'Unknown source "{}"'.format(source))
         r['sources'].append(ctx.sources[source])
     r['sink'] = p.sink('sink')
     r['tag'] = p.string('tag', None)
@@ -354,7 +354,9 @@ class _SectionParser(object):
 class _InvalidFieldError(ValueError):
 
     def __init__(self, section_parser, name, msg):
-        super(_InvalidFieldError, self).__init__()
+        message = 'File "{0}" section [{1}] has invalid field "{2}" -- {3}'.format(
+            section_parser.ctx.path, section_parser.section, name, msg)
+        super(_InvalidFieldError, self).__init__(message)
 
 
 class _MissingFieldError(ValueError):

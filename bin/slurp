@@ -104,7 +104,6 @@ def load_conf(args):
         for channel_conf in conf['channels']:
             channel_conf['backfill'] = False
     sink = getattr(args, 'sink', None)
-    print sink
     if sink:
         sink = parse_sink(sink)
         for channel_conf in conf['channels']:

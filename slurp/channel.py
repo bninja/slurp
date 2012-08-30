@@ -115,7 +115,7 @@ class Channel(object):
                         state = self.STOPPED
                         break
                     bytes += len(raw)
-                    block = (event.path, raw, offset_b, offset_e)
+                    block = (event.path, offset_b, offset_e, raw)
                     blocks.append(block)
                     if self.batch_size and len(blocks) < self.batch_size:
                         continue
@@ -127,9 +127,9 @@ class Channel(object):
                     if count:
                         tracker.set(self, event, blocks[count - 1][-1])
                         num_blocks += count
-                        num_bytes += sum(len(block[1]) for blocks in blocks[:count])
+                        num_bytes += sum(len(block[-1]) for blocks in blocks[:count])
                     logger.debug('channel "%s" consumed %s block(s) (%s byte(s)) in %0.4f sec(s)',
-                        self.name, count, sum(len(block[1]) for blocks in blocks[:count]), delta)
+                        self.name, count, sum(len(block[-1]) for blocks in blocks[:count]), delta)
                     if count < len(blocks):
                         state = self.THROTTLED
                         break
