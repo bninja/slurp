@@ -25,6 +25,7 @@ PROG=`which slurp`
 PID_FILE="/var/run/slurp.pid"
 LOCK_FILE="/var/lock/subsys/slurp"
 CONFIG="/etc/sysconfig/slurp"
+WORKERS=1
 
 MONITOR_PATHS="/var/log/messages"
 STATE_DIR="/var/lib/slurp"
@@ -41,6 +42,7 @@ $MONITOR_PATHS \
 --conf-file=$CONF_FILE \
 --log-level=$LOG_LEVEL \
 --daemonize --pid-file=$PID_FILE \
+--workers=$WORKERS \
 --enable-syslog"
 
 start() {

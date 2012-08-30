@@ -196,7 +196,7 @@ def monitor(args):
         master.sink = parse_sink(args.sink)
     if args.pid_file:
         from lockfile.pidlockfile import PIDLockFile
-        pid_file = PIDLockFile(opts.pid_file)
+        pid_file = PIDLockFile(args.pid_file)
     else:
         pid_file = None
     if not args.disable_stderrlog:
