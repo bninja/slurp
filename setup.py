@@ -35,7 +35,7 @@ setup(
         'nose==1.1.2',
         'mock==0.8',
         ],
-    py_modules=[
+    packages=[
         'slurp',
         ],
     scripts=[
