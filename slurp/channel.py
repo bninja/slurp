@@ -141,7 +141,30 @@ class Channel(object):
                     del blocks[:]
                     bytes = 0
                 else:
-                    state = self.EXHAUSTED
+                    if blocks:
+                        logger.debug('channel "%s" consuming %s block(s)',
+                            self.name, len(blocks))
+                        st = time.time()
+                        count = self.sink(blocks)
+                        delta = time.time() - st
+                        if count:
+                            tracker.set(self, event, blocks[count - 1][-1])
+                            num_blocks += count
+                            num_bytes += sum(len(block[-1]) for blocks in blocks[:count])
+                        logger.debug('channel "%s" consumed %s block(s) (%s byte(s)) in %0.4f sec(s)',
+                            self.name, count, sum(len(block[-1]) for blocks in blocks[:count]), delta)
+                        if count < len(blocks):
+                            state = self.THROTTLED
+                        elif self.throttle_latency and delta > self.throttle_latency:
+                            logger.info('channel "%s" sink latency %s exceeded throttle threshold %s',
+                                self.name, delta, self.throttle_latency)
+                            state = self.THROTTLED
+                        else:
+                            state = self.EXHAUSTED
+                        del blocks[:]
+                        bytes = 0
+                    else:
+                        state = self.EXHAUSTED
         except IOError, io:
             if io.errono != errno.ENOENT:
                 raise
@@ -228,7 +251,7 @@ class ChannelThread(threading.Thread):
                         self.backlog.clear()
                     elif not self.forever:
                         logger.debug('channel "%s" consumed all %s event(s)',
-                            self.name, num_events)
+                            self.channel.name, num_events)
                         break
                     continue
                 if self.throttled():
@@ -243,7 +266,7 @@ class ChannelThread(threading.Thread):
                 self.events.task_done()
                 num_events += 1
                 logger.info('channel "%s" consumed %s blocks (%s bytes) in %s sec(s) with disposition "%s"',
-                    self.name, num_blocks, num_bytes, delta, state)
+                    self.channel.name, num_blocks, num_bytes, delta, state)
                 if state == Channel.THROTTLED:
                     self.throttle_count += 1
                     self.throttle(self.throttle_duration())
