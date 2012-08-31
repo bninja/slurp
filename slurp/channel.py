@@ -265,7 +265,7 @@ class ChannelThread(threading.Thread):
                 delta = time.time() - st
                 self.events.task_done()
                 num_events += 1
-                logger.info('channel "%s" consumed %s blocks (%s bytes) in %s sec(s) with disposition "%s"',
+                logger.debug('channel "%s" consumed %s blocks (%s bytes) in %s sec(s) with disposition "%s"',
                     self.channel.name, num_blocks, num_bytes, delta, state)
                 if state == Channel.THROTTLED:
                     self.throttle_count += 1
