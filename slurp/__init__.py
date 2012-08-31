@@ -159,7 +159,12 @@ def monitor(channels, paths, tracking=None, callback=None):
         wm.add_watch(path, mask, rec=True, auto_add=True)
         logger.info('monitoring %s', path)
     logger.info('enter notification loop')
-    notifier.loop(callback=lambda x: callback)
+    if callback:
+        def notifier_callback(notifier):
+            return callback()
+    else:
+        notifier_callback = None
+    notifier.loop(callback=notifier_callback)
     logger.info('exit notification loop')
 
     for channel_thd in channel_thds:

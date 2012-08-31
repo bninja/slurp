@@ -18,6 +18,23 @@ logger = logging.getLogger(__name__)
 
 class Source(object):
     """
+    Represents a class of files. Each file in the class is made up of uniformly
+    delimited blocks. The delimiting is determined by `preamble` and
+    `terminal`.
+
+    `name`
+        Name given to this class of files (e.g. 'access-log').
+
+    `patterns`
+        Regexes used to determine whether a file should be classified as
+        belonging to `Source`.
+
+    `preamble`
+        Regex used to determine the beginning of a block. If blocks are always
+        single lines then a preamble is not needed should be None.
+
+    `terminal`
+        A string used to determine the end of a block (e.g. '\n').
     """
 
     def __init__(self, name, patterns, preamble, terminal):
@@ -176,6 +193,8 @@ class Channel(object):
 
 
 def create_channels(channel_confs):
+    """
+    """
     channels = []
     for channel_conf in channel_confs:
         channel_conf = channel_conf.copy()

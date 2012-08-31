@@ -1,4 +1,16 @@
 """
+Managing workers.
+
+Example:
+
+    ..code:: python
+
+        master = slurp.Master(
+            conf_file='/path/to/conf',
+            worker_count=4,
+            op=slurp.monitor)
+        master(['/path1', '/yet/another/path1'])
+
 """
 from collections import defaultdict
 import errno
@@ -26,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 SIGNALS = dict(map(
     lambda x: (getattr(signal, 'SIG%s' % x), x),
-    'HUP QUIT INT TERM USR1 USR2 WINCH CHLD'.split()
+    'HUP QUIT INT TERM USR1 USR2 WINCH CHLD KILL'.split()
     ))
 
 
@@ -35,6 +47,22 @@ NONE = object()
 
 class Worker(object):
     """
+    Worker spawned by `Master`.
+
+
+    `channels`
+        `Channel` configirations.
+
+    `tracking_file`
+        Path to tracking file or None for no tracking.
+
+    `op`
+        Callable with signature:
+
+            :param channels: `Channel`s.
+            :param paths: Paths to files or directories.
+            :param tracking: Path to tracking file or None for no tracking.
+            :callback: Callable that when true aborts `op`.
     """
 
     class MasterCheckThread(threading.Thread):
@@ -70,32 +98,65 @@ class Worker(object):
             }
 
     def handle_term(self, signum, frame):
-        logger.info('terminating')
         self.terminated = True
         raise self.Terminate()
 
     def run(self, paths):
+        self.MasterCheckThread(os.getppid()).start()
         try:
             channels = create_channels(self.channels)
-            while True:
-                self.op(
-                    channels=channels,
-                    paths=paths,
-                    tracking=self.tracking_file,
-                    callback=lambda: self.terminated)
+            self.op(
+                channels=channels,
+                paths=paths,
+                tracking=self.tracking_file,
+                callback=lambda: self.terminated)
         except self.Terminate:
             pass
-        except Exception, ex:
-            logger.exception(ex)
-            raise
-
 
 
 class Master(object):
     """
-    Used to manage forked workers.
+    Manager of forked workers.
 
-    See https://github.com/benoitc/gunicorn/blob/master/gunicorn/arbiter.py.
+    Based `gunicorn <https://github.com/benoitc/gunicorn/blob/master/gunicorn/arbiter.py>`_.
+
+    `conf_file`
+        Path to `Conf` configuration file.
+
+    `worker_count`
+        Number of workers to be used for un-tagged channels.
+
+    `op`
+        Callable with signature:
+
+        :param channels: `Channel`s.
+        :param paths: Paths to files or directories.
+        :param tracking: Path to tracking file or None for no tracking.
+        :callback: Callable that when true aborts `op`.
+
+    `channel_includes`
+        Names of channels to explicitly include. If None all channels are
+        included. Defaults to None.
+
+    `channel_excludes`
+        Names of channels to explicitly exclude. If None no channels are
+        excluded (unless `channel_includes` is provided). Defaults to None.
+
+    `backfill`
+        Flag indicating whether to force all channels to backfill or not,
+        overriding whatever is read for the channel from `conf_file`. If
+        unspecified backfill behavior is determined by `conf_file`.
+
+    `tracking_file`
+        Path to tracking file or None for no tracking, overriding whatever is
+        read for the channel `conf_file`. If unspecified tracking behavior is
+        determined by `conf_file`.
+
+    `sink`
+        Sink specification {type}[:argument] (e.g. py:path.to.module:func) to
+        use for all channels overriding whatever is read for the channel
+        `conf_file`. If unspecified a channel's sink is determined by
+        `conf_file`.
     """
 
     class Terminate(Exception):
@@ -108,6 +169,8 @@ class Master(object):
             self.channels = channels
             self.pid = pid
             self.fail_count = fail_count
+            self.terminating = False
+            self.terminate_count = 0
 
         def kill(self, sig):
             logger.info('sending signal "%s" to %s worker %s',
@@ -118,6 +181,8 @@ class Master(object):
                 if e.errno != errno.ESRCH:
                     raise
                 self.pid = None
+            if sig == signal.SIGTERM:
+                self.terminate_count += 1
 
     def __init__(self,
             conf_file,
@@ -142,6 +207,7 @@ class Master(object):
         self.name_to_channel = None
         self.max_fail_count = 10
         self.max_signal_queue = 10
+        self.max_terminate_count = 10
         self.stop_timeout = 10
         self.reload_timeout = 10
         self.signals = []
@@ -209,6 +275,7 @@ class Master(object):
             flags |= fcntl.FD_CLOEXEC
             fcntl.fcntl(fd, fcntl.F_SETFD, flags)
             flags = fcntl.fcntl(fd, fcntl.F_GETFL) | os.O_NONBLOCK
+            fcntl.fcntl(fd, fcntl.F_SETFL, flags)
 
         # loop
         try:
@@ -275,17 +342,23 @@ class Master(object):
             channels = self.channels[name]
             self.workers[name] = self.Worker(name=name, channels=channels)
 
+        # kill terminated workers
+        for worker in self.workers.itervalues():
+            if worker.pid is None or worker.terminate_count == 0:
+                continue
+            if worker.terminate_count > self.max_terminate_count:
+                worker.kill(signal.SIGKILL)
+            else:
+                worker.kill(signal.SIGTERM)
+
         # kill obsolete workers
         obsolete = set(self.workers.keys()).difference(self.channels.keys())
         for name in obsolete:
             worker = self.workers[name]
             if worker.pid is None:
                 self.workers.pop(worker.name)
-            else:
-                if worker.fail_count > self.max_fail_count:
-                    worker.kill(signal.SIGKILL)
-                else:
-                    worker.kill(signal.SIGTERM)
+            elif worker.terminate_count == 0:
+                worker.kill(signal.SIGTERM)
 
         # reap dead workers
         self.reap_workers()
@@ -293,6 +366,7 @@ class Master(object):
         # spawn workers
         for worker in self.workers.itervalues():
             if (worker.pid is None and
+                worker.name not in obsolete and
                 worker.fail_count < self.max_fail_count):
                 self.spawn_worker(worker, paths)
 
@@ -302,12 +376,13 @@ class Master(object):
         if pid != 0:
             # parent
             worker.pid = pid
+            worker.terminate_count = 0
             return
 
         # child
         try:
             # clear signals
-            for sig in SIGNALS.iterkeys():
+            for sig in self.signal_map.iterkeys():
                 signal.signal(sig, signal.SIG_DFL)
 
             # title
@@ -322,6 +397,8 @@ class Master(object):
             for sig, handler in worker.signal_map.iteritems():
                 signal.signal(sig, handler)
             worker.run(paths)
+        except Worker.Terminate:
+            pass
         except Exception, ex:
             logger.exception(ex)
             os._exit(1)
@@ -334,14 +411,12 @@ class Master(object):
                 if not worker_pid:
                     break
                 exit_code = status >> 8
-                worker = [
-                    worker for worker in self.workers.itervalues()
-                    if worker.pid == worker_pid
-                    ]
-                if not worker:
+                for worker in self.workers.itervalues():
+                    if worker.pid == worker_pid:
+                        break
+                else:
                     logger.warning('unknown worker %s', worker_pid)
                     continue
-                worker = worker[0]
                 if exit_code != 0:
                     logger.warning('%s worker %s failed with exit code %s',
                         worker.name, worker.pid, exit_code)
@@ -353,8 +428,8 @@ class Master(object):
                 else:
                     logger.info('%s worker %s exited', worker.name, worker.pid)
                 worker.pid = None
-        except OSError, e:
-            if e.errno == errno.ECHILD:
+        except OSError, ex:
+            if ex.errno == errno.ECHILD:
                 return
             raise
 
@@ -370,12 +445,7 @@ class Master(object):
     def reload(self):
         logger.info('reloading configuration "%s"', self.conf_file)
         self._load_conf()
-        logger.info('reloading')
-        expires = time.time() + self.reload_timeout
-        while self.workers and time.time() < expires:
-            self.kill_workers(signal.SIGTERM)
-            time.sleep(0.1)
-            self.reap_workers()
-        self.kill_workers(signal.SIGKILL)
-        for worker in self.workers:
+        logger.info('replacing workers')
+        self.kill_workers(signal.SIGTERM)
+        for worker in self.workers.itervalues():
             worker.fail_count = 0
