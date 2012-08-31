@@ -368,7 +368,7 @@ class Master(object):
         return count
 
     def reload(self):
-        logger.info('reloading configuration "%s"', self.conf_path)
+        logger.info('reloading configuration "%s"', self.conf_file)
         self._load_conf()
         logger.info('reloading')
         expires = time.time() + self.reload_timeout
