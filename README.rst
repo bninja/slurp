@@ -11,14 +11,15 @@ file is something that:
 
 - is created
 - has uniformly delimited strings appended to it
-- is then possibly deleted.
+- is then possibly deleted
 
-If a file does not conform to this lifestyle it is not suitable as a slurp source.
+If a file does not conform to this lifestyle it is not suitable as a slurp
+source.
 
 In the slurp world sources are mapped to channels. Channels:
 
-- have once or more sources associates with them
-- can tweak source parsing bahvior (e.g. struct, read size, etc)
+- have one or more sources associated with them
+- can tweak source parsing behavior (e.g. strictness, read size, etc)
 - has a single sink  
 - controls sink throttling (e.g. if a sink fails or takes a long time)
 
@@ -28,7 +29,8 @@ syslog spool(s) to elastic search and other data mining tools.
 Issues
 ------
 
-Please use tagged github `issues <https://github.com/bninja/slurp/issues>`_ to request features or report bugs.
+Please use tagged github `issues <https://github.com/bninja/slurp/issues>`_ to
+request features or report bugs.
 
 Dependencies
 ------------

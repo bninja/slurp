@@ -1,4 +1,106 @@
 """
+The configuration of sources, sink and channels used INI format. There is one
+root, or primary, configuration and zero or more included, or secondary,
+configurations.
+
+There are three settings sections:
+
+    [general]
+    # directory path for state storage, defaults to /tmp
+    state_dir={string}
+
+    # whether to enable (true) or disable (false) tracking, defaults to true
+    tracking={flag}
+
+    # other configuration files to include, default to none
+    includes={comma separated file globs}
+
+    [parse]
+    # whether to fail-on (true) or ignore (false) malformed blocks, defaults to
+    # true
+    strict={flag}
+
+    # size of read buffer in bytes when parsing for blocks, defaults to 2048
+    read_size={integer}
+
+    [throttle]
+    # maximum number of seconds to throttle a sink, defaults to 600.0
+    max={float}
+
+    # base duration of sink throttle in seconds, defaults to 5.0
+    duration={float}
+
+    # threshold of sink throttle in seconds, 0 for no throttle, defaults to
+    # 10.0
+    latency={float}
+
+    # percentage of duration to randomly deviate throttle, defaults to 2.0
+    deviation={float}
+
+    # whether to use exponential backoff on back-to-back throttles, defaults
+    # to true
+    backoff={flag}
+
+Source sections, where the name of the source is prefixed by "source:":
+
+    [source:{string}]  # {string} is the source name
+    # which files to match as regexes, defaults to none
+    patterns={comma separated file regexes}
+
+    # which files to match as file globs, defaults to none
+    globs={comma separated file globs}
+
+    # delimiter for beginning of a block, defaults to none
+    preamble={regex}
+
+    # delimiter for ending of a block, defaults to \n
+    terminal={string}
+
+And channel section where the name of the source is prefixed by "channel:":
+
+    [channel:{string}]  # {string} is the channel name
+    # sources to associate with channel, required
+    sources={comma separated source names}
+
+    # sink specification as {type}[:argument], required
+    sink={string}
+
+    # flag indicating whether to backfill on source file discovery, defaults
+    # to true
+    backfill={flag}
+
+    # maximum number of blocks to submit to a sink at once, defaults to 1000
+    batch_size={integer}
+
+    # overrides `parse`.`strict`, defaults to `parse`.`strict`
+    parse_strict={flag}
+
+    # overrides `parse`.`read_size`, defaults to `parse`.`read_size`
+    parse_read_size={integer}
+
+    # overrides `throttle_`.`max`, defaults to `throttle_`.`max`
+    throttle_max={float}
+
+    # overrides `throttle_`.`duration`, defaults to `throttle_`.`duration`
+    throttle_duration={float}
+
+    # overrides `throttle_`.`latency`, defaults to `throttle_`.`latency`
+    throttle_latency={float}
+
+    # overrides `throttle_`.`deviation`, defaults to `throttle_`.`deviation`
+    throttle_deviation={float}
+
+    # overrides `throttle_`.`backoff`, defaults to `throttle_`.`backoff`
+    throttle_backoff={flag}
+
+The root configuration can have all of these sections.
+
+Included configurations (i.e. `general`:`includes`) can have all sections
+**except** `general`.
+
+Note that the `parse` and `throttle` sections of included configurations will
+**only** affect sources and channels in that file. Fields of `parse` or
+`throttle` not specified in an included configuration are inherited from root.
 """
 from ConfigParser import SafeConfigParser
 import fnmatch
@@ -12,6 +114,48 @@ import sink
 
 def load(path, includes=None, excludes=None):
     """
+    Loads configuration from `path`.
+
+    :param path: Path to file from which to load configuration.
+    :param includes: Names of channels to explicitly include. If None then all
+                     channels are included. Defaults to None.
+    :param excludes: Names of channels to explicitly exclude. If None then no
+                     channel is excluded unless `includes` are provided and it
+                     is not present.
+
+    :return: Dictionary with loaded configuration information:
+
+             {
+                 "state_dir": string,
+                 "tracking": bool,
+                 "tracking_file": string,
+                 "channels": [
+                     {
+                          "name": ,
+                          "sources": [
+                              {
+                              "name": string,
+                              "patterns": [regex, ...],
+                              "preamble": regex,
+                              "terminal": string,
+                              }
+                              ...
+                              ],
+                          "sink": (string, string),
+                          "batch_size": int,
+                          "backfill": flag,
+                          "tag": string,
+                          "parse_strict": bool,
+                          "parse_read_size": int,
+                          "throttle_max": float,
+                          "throttle_duration": float,
+                          "throttle_latency": float,
+                          "throttle_deviation": v,
+                          "throttle_backoff": bool,
+                      }
+                     ...
+                 ]
+             }
     """
     if not os.path.isfile(path):
         raise ValueError('Cannot find file "{0}"'.format(path))
@@ -218,6 +362,7 @@ def _load_channel(ctx, section, name):
     r['sink'] = p.sink('sink')
     r['tag'] = p.string('tag', None)
     r['backfill'] = p.bool('backfill')
+    r['batch_size'] = p.int('batch_size', 1000)
     r['throttle_max'] = p.float('throttle_max', ctx.throttle['max'])
     r['throttle_duration'] = p.float('throttle_duration', ctx.throttle['duration'])
     r['throttle_latency'] = p.float('throttle_latency', ctx.throttle['latency'])

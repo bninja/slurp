@@ -1,15 +1,15 @@
 """
 Managing workers.
 
-Example:
+Example of using monitor workers:
 
-    ..code:: python
+..code:: python
 
-        master = slurp.Master(
-            conf_file='/path/to/conf',
-            worker_count=4,
-            op=slurp.monitor)
-        master(['/path1', '/yet/another/path1'])
+    master = slurp.Master(
+        conf_file='/path/to/conf',
+        worker_count=4,
+        op=slurp.monitor)
+    master(['/path1', '/yet/another/path1'])
 
 """
 from collections import defaultdict
@@ -51,7 +51,7 @@ class Worker(object):
 
 
     `channels`
-        `Channel` configirations.
+        `Channel` configurations.
 
     `tracking_file`
         Path to tracking file or None for no tracking.
@@ -124,7 +124,7 @@ class Master(object):
         Path to `Conf` configuration file.
 
     `worker_count`
-        Number of workers to be used for un-tagged channels.
+        Number of workers to use for un-tagged channels.
 
     `op`
         Callable with signature:

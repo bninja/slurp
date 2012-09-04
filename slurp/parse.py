@@ -14,11 +14,11 @@ class BlockIterator(object):
         File-like object we are parsing for blocks.
 
     `strict`
-        Flag indicating whether to fail or ignore malformed blocks. It
-        defaults to False.
+        Flag indicating whether to fail (True) or ignore (False) malformed
+        blocks. Defaults to False.
 
     `read_size`
-        The number of bytes to read. It defaults to 2048.
+        The number of bytes to read at a time. Defaults to 2048.
     """
     def __init__(self, fo, strict=False, read_size=2048):
         self.fo = fo

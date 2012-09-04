@@ -1,3 +1,6 @@
+"""
+Trackers used to record the progress a channel has made in processing sources.
+"""
 import logging
 import sqlite3
 
@@ -7,6 +10,10 @@ logger = logging.getLogger(__name__)
 
 class Tracker(object):
     """
+    SQLite backed progress tracking.
+
+    `db_path`
+        Path to file where SQLite database file is stored.
     """
 
     def __init__(self, db_path):
@@ -88,6 +95,9 @@ class Tracker(object):
 
 
 class DummyTracker(object):
+    """
+    Dummy/NOP progress tracking.
+    """
 
     def get(self, channel, event):
         return None

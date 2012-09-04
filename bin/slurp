@@ -74,7 +74,11 @@ def arg_parser():
     parents = [common_parser]
     parser = ArgumentParser(
         version=slurp.__version__,
-        parents=parents)
+        parents=parents,
+        description="""\
+slurp is a block parser. It iterates over "entries" in append only sources
+(aka files) and sends them along to a sink for further processing. The mapping
+from source to sink is called a channel.""")
     
     sub_parsers = parser.add_subparsers(title='sub-commands')
     seed_arg_parser(sub_parsers, parents)
@@ -86,9 +90,9 @@ def arg_parser():
 
 def parse_sink(sink):
     if sink == 'stdout':
-        sink = 'file://dev/stdout' 
+        sink = 'file:/dev/stdout' 
     if sink == 'null':
-        sink = 'file://dev/null'
+        sink = 'file:/dev/null'
     if sink == 'dbg':
         sink = 'dbg'
     type, _, arg = sink.partition(':')
@@ -115,7 +119,8 @@ def load_conf(args):
 
 def seed_arg_parser(sub_parsers, parents):
     parser = sub_parsers.add_parser('seed', parents=parents,
-        description='Initializes channel tracking information for PATHs.')
+        description="""
+Initializes channel tracking information for PATHs.""")
     parser.add_argument('paths',
         nargs='*', metavar='PATH', help='Path to file or directory.')
     parser.set_defaults(command=seed)
@@ -137,7 +142,8 @@ def seed(args):
 
 def touch_arg_parser(sub_parsers, parents):
     parser = sub_parsers.add_parser('touch', parents=parents,
-        description='Triggers ingest of PATHs by interested channels.')
+        description="""\
+Triggers ingest of PATHs by interested channels.""")
     parser.add_argument('paths',
         nargs='*', metavar='PATH', help='Path to file or directory.')
     parser.add_argument(
@@ -162,8 +168,8 @@ def touch(args):
 
 def monitor_arg_parser(sub_parsers, parents):
     parser = sub_parsers.add_parser('monitor', parents=parents,
-        description='Monitors PATHs for changes and triggers ingest by \
-interested channels when detected.')
+        description="""\
+Monitors PATHs for changes and triggers ingest by interested channels.""")
     parser.add_argument('paths',
         nargs='*', metavar='PATH', help='Path to file or directory.')
     parser.add_argument(
@@ -171,13 +177,13 @@ interested channels when detected.')
         help='Daemonize the monitor.')
     parser.add_argument(
         '-w', '--workers', type=int, default=1,
-        help='Number of workers.')
+        help='Number of workers to use for un-tagged channels.')
     parser.add_argument(
         '--pid-file', default=None,
         metavar='FILE', help='PID file.')
     parser.add_argument(
         '--sink', choices=['stdout', 'null', 'dbg'], default=None,
-        metavar='NAME', help='Force channels to use a sink.')
+        metavar='NAME', help='Force all channels to use a particular sink.')
     parser.set_defaults(command=monitor)
     return parser
     

@@ -34,6 +34,7 @@ setup(
     tests_require=[
         'nose==1.1.2',
         'mock==0.8',
+        'unitest2 >= 0.5.1',
         ],
     packages=[
         'slurp',

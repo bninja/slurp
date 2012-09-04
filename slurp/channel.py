@@ -1,5 +1,3 @@
-"""
-"""
 from functools import partial
 import logging
 import os
@@ -19,8 +17,8 @@ logger = logging.getLogger(__name__)
 class Source(object):
     """
     Represents a class of files. Each file in the class is made up of uniformly
-    delimited blocks. The delimiting is determined by `preamble` and
-    `terminal`.
+    delimited strings called blocks. The delimiting is determined by
+    `preamble` and `terminal`.
 
     `name`
         Name given to this class of files (e.g. 'access-log').
@@ -59,6 +57,64 @@ class Source(object):
 
 class Channel(object):
     """
+    Maps `Source`s to a `Sink` as well as controlling the parsing, batching and
+    throttling behavior used when pulling a block from a source and dispatching
+    it to a sink.
+
+    `name`
+        The name of the channel.
+
+    `srcs`
+        Collection of `Source`s in which the channel is interested.
+
+    `sink`
+        A `Sink` to which blocks parsed from `Source`s should be sent.
+
+    `tag`
+        The channel tag. This is used during various operations to group or
+        partition up channels (e.g. `Master` will group tagged channels with
+        one `Worker`). If None then the channel is un-tagged. Defaults to None.
+
+    `batch_size`
+        The maximum number of blocks to pass to `sink`. Default to 1000. To
+        disable batching set this to 1.
+
+    `parse_strict`
+        Flag indicating whether block parsing should fail (True) if malformed
+        blocks are encountered or simply skipped (False). Defaults to True.
+
+    `parse_read_size`
+        The size in bytes of the buffer to read from a source files when
+        parsing for blocks. Defaults to 2048.
+
+    `backfill`
+        Flag indicating whether to initialize a source file's tracking offset
+        to 0 (True) or its end position (False). If True then blocks appended
+        to a source file *before* being processed by the channel will still be
+        parsed and sent along to its `sink`.
+
+    `throttle_max`
+        The maximum amount of time in seconds to throttle sending blocks from
+        `srcs` to `sink`. Defaults to 600.
+
+    `throttle_duration`
+        The number of seconds to throttle the `sink`. Defaults to 10.
+
+    `throttle_latency`
+        The threshold in seconds above which to throttle a `sink`. If a `sink`
+        takes longer than `throttle_latency` seconds to process blocks it will
+        be throttled. If 0 or None then throttling is disabled. Defaults to 5.
+
+    `throttle_deviation`
+        The percentage of `threshold_duration` to randomly deviate throttle
+        duration (e.g. 1.0 means a +/- 1 % randomized deviation from
+        `throttle_duration`). Defaults to 2.
+
+    `throttle_backoff`
+        Flag indicating whether to apply exponential increase to
+        `throttle_duration` if repeated throttles are encountered (True).
+        Defaults to True.
+
     """
 
     def __init__(self,
@@ -101,6 +157,31 @@ class Channel(object):
     EXHAUSTED   = 'exhausted'
 
     def __call__(self, event, tracker=None, stop=None):
+        """
+        Parsed blocks from the source associated with `event`, passing them
+        along to `sink`. Parsing and sinking will continue until one of:
+
+            - `event.src` has been exhausted
+            - `stop` callback returns True
+            - `sink` throttling is triggered by failure or high latency
+
+        :param event: `Event` instance indicating which source was modified.
+        :param tracker: Optional `Tracker` instance. Defaults to None.
+        :param stop: Optional callback used to abort block parsing and sinking.
+
+        :return: A tuple containing:
+
+                     1. Exit disposition:
+
+                            - `Channel.STOPPED`
+                            - `Channel.THROTTLED`
+                            - `Channel.EXHAUSTED`
+
+                     2. Number of blocks parsed and successfully consumed by
+                        `sink`
+                     3. Number of bytes parsed and successfully consumed by
+                        `sink`
+        """
         if event.src not in self.srcs:
             raise ValueError(
                 'Invalid source "{0}", expected one of {1}'.format(
@@ -194,6 +275,39 @@ class Channel(object):
 
 def create_channels(channel_confs):
     """
+    Creates `Channel`s based on passed configurations.
+
+    :param channel_confs: Collection of dictionaries. Each dictionary
+                          describes a channel and should have this form:
+
+                          {
+                              "name": ,
+                              "sources": [
+                                  {
+                                  "name": string,
+                                  "patterns": [regex, ...],
+                                  "preamble": regex,
+                                  "terminal": string,
+                                  }
+                                  ...
+                                  ],
+                              "sink": (string, string),
+                              "batch_size": int,
+                              "backfill": flag,
+                              "tag": string,
+                              "parse_strict": bool,
+                              "parse_read_size": int,
+                              "throttle_max": float,
+                              "throttle_duration": float,
+                              "throttle_latency": float,
+                              "throttle_deviation": v,
+                              "throttle_backoff": bool,
+                          }
+
+                          See `Source` and `Channels` for more details on these
+                          fields.
+
+    :return: List of `Channel` instances corresponding to `channel_confs`.
     """
     channels = []
     for channel_conf in channel_confs:
@@ -211,6 +325,19 @@ def create_channels(channel_confs):
 
 class ChannelThread(threading.Thread):
     """
+    Consumer thread for feeding `Source` `Event`s from a queue to a `Channel`.
+
+    `channel`
+        The channel associated with this thread.
+
+    `tracking`
+        Optional path to a tracking file to store for storing processing
+        progress. Defaults to None.
+
+    `forever`
+        Optional flag indicating whether to consume `Event`s from the `event`
+        queue until stopped (True) or exit after one `Event` has been consumed
+        (False). Defaults to False.
     """
 
     poll_frequency = 1.0
@@ -218,8 +345,8 @@ class ChannelThread(threading.Thread):
     def __init__(self, channel, tracking=None, forever=False):
         super(ChannelThread, self).__init__()
         self.daemon = True
-        self.tracking = tracking
         self.channel = channel
+        self.tracking = tracking
         self.forever = forever
         self.stop_event = threading.Event()
         self.throttle_event = threading.Event()
@@ -302,6 +429,25 @@ class ChannelThread(threading.Thread):
 
 class Event(object):
     """
+    Represents an event, or events if merged with another, associated with a
+    file. Merging happens when, for performance reasons, multiple events
+    associated with a common `src` and `path` coalesce to one.
+
+    `path`
+        Path to the associated file.
+
+    `flags`
+        Bitwise OR of the operations:
+
+            - `Event.CREATED_FLAG`
+            - `Event.MODIFIED_FLAG`
+            - `Event.DELETED_FLAG`
+
+        that triggered the event. More than one can be set if this is a
+        *merged* (aka coalesced) event.
+
+    `src`
+        `Source` associated with the `file`.
     """
 
     CREATED_FLAG    = 1 << 2
@@ -320,7 +466,7 @@ class Event(object):
         if event.src != self.src:
             raise ValueError('Unable to merge -- source %s != %s'.format(
                 event.src, self.src))
-        self.flags |= flags
+        self.flags |= event.flags
 
     @property
     def created(self):
