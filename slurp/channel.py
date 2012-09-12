@@ -51,7 +51,7 @@ class Source(object):
 
     def match(self, path):
         return (any(p.search(path) for p in self.patterns) and
-                not any(p.search(path) for pattern in self.exclude_patterns))
+                not any(p.search(path) for p in self.exclude_patterns))
 
     def parser(self, fo, **kwargs):
         return self.parser_cls(fo, **kwargs)
