@@ -55,7 +55,7 @@ from master import Master
 from track import Tracker, DummyTracker
 
 
-__version__ = '0.3.0'
+__version__ = '0.3.1'
 
 
 logger = logging.getLogger(__name__)
@@ -195,7 +195,7 @@ class _MonitorEvent(pyinotify.ProcessEvent):
 
         # deleted
         if event.mask & pyinotify.IN_DELETE != 0:
-            type |= Event.DELETE_FLAG
+            type |= Event.DELETED_FLAG
             del self.matches[event.pathname]
 
         # enqueue
