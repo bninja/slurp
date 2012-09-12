@@ -1,5 +1,5 @@
 """
-The configuration of sources, sink and channels used INI format. There is one
+The configuration of sources, sink and channels uses INI format. There is one
 root, or primary, configuration and zero or more included, or secondary,
 configurations.
 
@@ -47,8 +47,14 @@ Source sections, where the name of the source is prefixed by "source:":
     # which files to match as regexes, defaults to none
     patterns={comma separated file regexes}
 
+    # which files to exclude as regexes, defaults to none
+    exclude_patterns={comma separated file regexes}
+
     # which files to match as file globs, defaults to none
     globs={comma separated file globs}
+
+    # which files to exclude as file globs, defaults to none
+    exclude_globs={comma separated file globs}
 
     # delimiter for beginning of a block, defaults to none
     preamble={regex}
@@ -343,6 +349,8 @@ def _load_source(ctx, section, name):
     p = _SectionParser(ctx, section)
     r['patterns'] = p.regexs('patterns', [])
     r['patterns'].extend(p.globs('globs', []))
+    r['exclude_patterns'] = p.regexs('exclude_patterns', [])
+    r['exclude_patterns'].extend(p.globs('exclude_globs', []))
     r['preamble'] = p.regex('preamble', None)
     r['terminal'] = p.string('terminal').decode('string_escape')
     return r
@@ -510,4 +518,3 @@ class _MissingFieldError(ValueError):
         message = 'File "{0}" section [{1}] missing required "{2}"'.format(
             section_parser.ctx.path, section_parser.section, name)
         super(_MissingFieldError, self).__init__(message)
-

@@ -29,7 +29,6 @@ class TestSeed(TestCase):
     pass
 
 
-
 class TestTouch(TestCase):
 
     pass

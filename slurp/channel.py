@@ -35,9 +35,10 @@ class Source(object):
         A string used to determine the end of a block (e.g. '\n').
     """
 
-    def __init__(self, name, patterns, preamble, terminal):
+    def __init__(self, name, patterns, exclude_patterns, preamble, terminal):
         self.name = name
         self.patterns = patterns
+        self.exclude_patterns = exclude_patterns
         if preamble:
             self.parser_cls = partial(
                 parse.MultiLineIterator,
@@ -49,7 +50,8 @@ class Source(object):
                 terminal=terminal)
 
     def match(self, path):
-        return any(pattern.search(path) for pattern in self.patterns)
+        return (any(p.search(path) for p in self.patterns) and
+                not any(p.search(path) for pattern in self.exclude_patterns))
 
     def parser(self, fo, **kwargs):
         return self.parser_cls(fo, **kwargs)
@@ -286,6 +288,7 @@ def create_channels(channel_confs):
                                   {
                                   "name": string,
                                   "patterns": [regex, ...],
+                                  "exclude_patterns": [regex, ...],
                                   "preamble": regex,
                                   "terminal": string,
                                   }
@@ -375,7 +378,7 @@ class ChannelThread(threading.Thread):
             duration *= self.throttle_count
         duration = min(duration, self.channel.throttle_max)
         if self.channel.throttle_deviation:
-            deviation = duration * ((self.channel.throttle_deviation)/2.0)
+            deviation = duration * ((self.channel.throttle_deviation) / 2.0)
             duration += random.uniform(-1 * deviation, deviation)
         return duration
 

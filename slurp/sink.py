@@ -169,7 +169,6 @@ class SocketSink(Sink):
         # TODO
         raise NotImplemenetedError()
 
-
     def _send(self, block):
         # FIXME: not sure what protocol to use
         raise NotImplemenetedError()
@@ -185,7 +184,7 @@ class PipeSink(Sink):
     Intended to forward parsed blocks to another language or environment.
     """
     def __init__(self, path):
-         raise NotImplemenetedError()
+        raise NotImplemenetedError()
 
     def __call__(self, blocks):
         # FIXME: not sure what protocol to use
