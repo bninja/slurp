@@ -55,7 +55,7 @@ from master import Master
 from track import Tracker, DummyTracker
 
 
-__version__ = '0.3.1'
+__version__ = '0.3.2'
 
 
 logger = logging.getLogger(__name__)
@@ -175,9 +175,8 @@ class _MonitorEvent(pyinotify.ProcessEvent):
             matches = []
             for channel_thd in self.channel_thds:
                 src = channel_thd.channel.match(event.pathname)
-                if not src:
-                    break
-                matches.append((channel_thd, src))
+                if src:
+                    matches.append((channel_thd, src))
             self.matches[event.pathname] = matches
         matches = self.matches[event.pathname]
         if not matches:
