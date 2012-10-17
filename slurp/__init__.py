@@ -241,7 +241,7 @@ def monitor(channels, paths, tracking=None, callback=None):
             pyinotify.IN_DELETE_SELF |
             pyinotify.IN_MOVE_SELF)
     wm = pyinotify.WatchManager()
-    me = _MonitorEvent(channel_thds)
+    me = _MonitorEvent(channel_thds, tracking)
     notifier = pyinotify.Notifier(wm, default_proc_fun=me)
     notifier.coalesce_events(True)
     for path in paths:
