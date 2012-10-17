@@ -115,7 +115,7 @@ import os
 import re
 import tempfile
 
-import sink
+from . import sink
 
 
 def load(path, includes=None, excludes=None):

@@ -75,7 +75,7 @@ class Tracker(object):
             DELETE FROM tracks
             WHERE channel = ? AND path = ?
             """,
-            (name, event.path))
+            (channel.name, event.path))
         if cur.rowcount != 0:
             logger.debug('track ("%s", "%s") deleted',
                 channel.name, event.path)

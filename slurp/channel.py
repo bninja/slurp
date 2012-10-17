@@ -1,3 +1,4 @@
+import errno
 from functools import partial
 import logging
 import os
@@ -6,9 +7,9 @@ import random
 import threading
 import time
 
-import parse
-import sink
-import track
+from . import parse
+from . import sink
+from . import track
 
 
 logger = logging.getLogger(__name__)

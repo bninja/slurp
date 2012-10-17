@@ -49,10 +49,10 @@ import os
 
 import pyinotify
 
-from channel import Event, Source, Channel, ChannelThread, create_channels
-from conf import load as load_conf
-from master import Master
-from track import Tracker, DummyTracker
+from .channel import Event, Source, Channel, ChannelThread, create_channels
+from .conf import load as load_conf
+from .master import Master
+from .track import Tracker, DummyTracker
 
 
 __version__ = '0.3.2'
@@ -155,9 +155,13 @@ def touch(channels, paths, tracking=None, callback=None):
 
 class _MonitorEvent(pyinotify.ProcessEvent):
 
-    def __init__(self, channel_thds):
+    def __init__(self, channel_thds, tracking):
         self.channel_thds = channel_thds
         self.matches = {}
+        if self.tracking:
+            self.tracker = Tracker(tracking)
+        else:
+            self.tracker = DummyTracker()
 
     def process_default(self, event):
         logger.debug('processing event %s', event)
@@ -165,7 +169,7 @@ class _MonitorEvent(pyinotify.ProcessEvent):
         # deleted
         if event.mask & pyinotify.IN_ISDIR:
             if event.mask & pyinotify.IN_DELETE:
-                ctx.tracker.delete_prefix(event.pathname)
+                self.tracker.delete_prefix(event.pathname)
             for k in self.matches.keys():
                 if k.startswith(event.pathname):
                     del self.matches[k]

@@ -28,9 +28,8 @@ import sys
 import threading
 import time
 
-from conf import load as load_conf
-from channel import create_channels
-import sink
+from .conf import load as load_conf
+from .channel import create_channels
 
 
 logger = logging.getLogger(__name__)
