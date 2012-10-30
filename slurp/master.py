@@ -78,7 +78,6 @@ class Worker(object):
                     logger.warning('parent %s changed to %s, terminating',
                         self.parent_pid, os.getppid())
                     os.kill(os.getpid(), signal.SIGTERM)
-                    break
                 time.sleep(self.check_freq)
 
     class Terminate(Exception):

@@ -3,9 +3,11 @@
 Script used to slurp (seed, touch or monitor) files. See --help for usage.
 """
 from __future__ import with_statement
+from argparse import ArgumentParser
+import fcntl
 import logging
 import logging.handlers
-from argparse import ArgumentParser
+import signal
 import sys
 
 import slurp
@@ -115,6 +117,33 @@ def load_conf(args):
     return conf
 
 
+class Flock(object):
+    
+    def __init__(self, path):
+        self.path = path
+        self.fo = None
+
+    def acquire(self, timeout):
+        logger.info('locking %s', self.path)
+        self.fo = open(self.path, 'w')
+        prev_handler = signal.signal(signal.SIGALRM, self._timeout)
+        signal.alarm(timeout)
+        try:    
+            fcntl.flock(self.fo.fileno(), fcntl.LOCK_EX)
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, prev_handler)
+        logger.info('locked %s', self.path)
+    
+    def release(self):
+        logger.info('releasing %s', self.path)
+        fcntl.flock(self.fo.fileno(), fcntl.LOCK_UN)
+        self.fo.close()
+        
+    def _timeout(self, signum, frame):
+        logger.warning('unable to lock %s', self.path)
+
+
 # seed
 
 def seed_arg_parser(sub_parsers, parents):
@@ -182,6 +211,12 @@ Monitors PATHs for changes and triggers ingest by interested channels.""")
         '--pid-file', default=None,
         metavar='FILE', help='PID file.')
     parser.add_argument(
+        '--lock-file', default=None,
+        metavar='FILE', help='Lock file.')
+    parser.add_argument(
+        '--lock-timeout', default=5, type=int,
+        metavar='SECONDS', help='Lock timeout in SECONDS.')
+    parser.add_argument(
         '--sink', choices=['stdout', 'null', 'dbg'], default=None,
         metavar='NAME', help='Force all channels to use a particular sink.')
     parser.set_defaults(command=monitor)
@@ -219,16 +254,28 @@ def monitor(args):
                  signal_map=master.signal_map):
             if args.enable_syslog:
                 configure_syslog()  # NOTE: do this after daemonize
+            if args.lock_file:
+                lock = Flock(args.lock_file)
+                lock.acquire(timeout=args.lock_timeout)
             try:
                 master(args.paths)
             except Exception, ex:
                 logger.exception(ex)
                 raise
+            finally:
+                if args.lock_file:
+                    lock.release()
     else:
         if args.enable_syslog:
             configure_syslog()  # NOTE: do this after daemonize
-        master(args.paths)
-
+        if args.lock_file:
+            lock = Flock(args.lock_file)
+            lock.acquire(timeout=args.lock_timeout)
+        try:
+            master(args.paths)
+        finally:
+            if args.lock_file:
+                lock.release()
 
 # main
 

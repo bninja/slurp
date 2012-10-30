@@ -158,7 +158,7 @@ class _MonitorEvent(pyinotify.ProcessEvent):
     def __init__(self, channel_thds, tracking):
         self.channel_thds = channel_thds
         self.matches = {}
-        if self.tracking:
+        if tracking:
             self.tracker = Tracker(tracking)
         else:
             self.tracker = DummyTracker()
