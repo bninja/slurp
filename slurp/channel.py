@@ -267,7 +267,7 @@ class Channel(object):
                     else:
                         state = self.EXHAUSTED
         except IOError, io:
-            if io.errono != errno.ENOENT:
+            if io.errno != errno.ENOENT:
                 raise
             logger.debug('channel "%s" source %s has been deleted',
                 self.name, event.path)
