@@ -155,9 +155,9 @@ class Channel(object):
                 return src
         return None
 
-    STOPPED     = 'stopped'
-    THROTTLED   = 'throttled'
-    EXHAUSTED   = 'exhausted'
+    STOPPED   = 'stopped'
+    THROTTLED = 'throttled'
+    EXHAUSTED = 'exhausted'
 
     def __call__(self, event, tracker=None, stop=None):
         """

@@ -79,6 +79,7 @@ class Tracker(object):
         if cur.rowcount != 0:
             logger.debug('track ("%s", "%s") deleted',
                 channel.name, event.path)
+        self.cxn.commit()
         cur.close()
 
     def delete_prefix(self, prefix):
