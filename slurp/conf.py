@@ -325,7 +325,7 @@ def _load_general(ctx):
     p = _SectionParser(ctx, 'general')
     r['state_dir'] = p.string('state_dir')
     r['tracking'] = p.bool('tracking')
-    r['tracking_timeout'] = p.float('tracking-timeout')
+    r['tracking_timeout'] = p.float('tracking-timeout', 15.0)
     r['includes'] = p.strings('includes', [])
     return r
 
