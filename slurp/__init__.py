@@ -73,7 +73,7 @@ def _files(path):
                     yield file_path
 
 
-def seed(channels, paths, tracking=None):
+def seed(channels, paths, tracking=None, tracking_timeout=None):
     """
     Iterates of all files reachable from `paths` and initializes tracking
     information about them with any interested `channels`. A `Channel` will be
@@ -87,6 +87,8 @@ def seed(channels, paths, tracking=None):
     :param tracking: Path to file where tracking information should be stored.
                      If None then a dummy/nop tracker is used which can be
                      useful for debugging. Defaults to None.
+    :param tracking_timeout: Time to wait in seconds to acquire tracking lock.
+                             Defaults to None.
     """
     if tracking:
         tracker = Tracker(tracking)
@@ -95,9 +97,9 @@ def seed(channels, paths, tracking=None):
     for path in paths:
         for file_path in _files(path):
             with open(file_path, 'r') as fo:
-                print fo
                 fo.seek(0, os.SEEK_END)
                 offset = fo.tell()
+            hits = 0
             for channel in channels:
                 if channel.backfill:
                     continue
@@ -108,9 +110,12 @@ def seed(channels, paths, tracking=None):
                     file_path, channel.name, offset)
                 event = Event(file_path, Event.MODIFIED_FLAG, src)
                 tracker.set(channel, event, offset)
+                hits += 1
+            logger.debug('seeded "%s" for %s channel(s) @ %s',
+                    file_path, hits, offset)
 
 
-def touch(channels, paths, tracking=None, callback=None):
+def touch(channels, paths, tracking=None, tracking_timeout=None, callback=None):
     """
     Triggers block parsing of all files reachable from `paths` by interested
     `channels`. A `Channel` will be interested if any of its `source` patterns
@@ -125,12 +130,15 @@ def touch(channels, paths, tracking=None, callback=None):
     :param tracking: Path to file where tracking information should be stored.
                      If None then a dummy/nop tracker is used which can be
                      useful for debugging. Defaults to None.
+    :param tracking_timeout: Time to wait in seconds to acquire tracking lock.
+                             Defaults to None.
     :param callback: Callable taking no arguments and returns either True or
                      False. If it returns True then parsing is aborted.
     """
     channel_events = defaultdict(list)
     for path in paths:
         for file_path in _files(path):
+            hits = 0
             for channel in channels:
                 src = channel.match(file_path)
                 if not src:
@@ -139,10 +147,12 @@ def touch(channels, paths, tracking=None, callback=None):
                     file_path, channel.name)
                 event = Event(file_path, Event.MODIFIED_FLAG, src)
                 channel_events[channel].append(event)
+                hits += 1
+            logger.debug('touched "%s" for %s channel(s)', file_path, hits)
 
     channel_thds = []
     for channel, events in channel_events.iteritems():
-        channel_thd = ChannelThread(channel, tracking)
+        channel_thd = ChannelThread(channel, tracking, tracking_timeout)
         map(channel_thd.events.put, events)
         channel_thd.start()
         channel_thds.append(channel_thd)
@@ -206,7 +216,7 @@ class _MonitorEvent(pyinotify.ProcessEvent):
             channel_thd.events.put(Event(event.pathname, type, src))
 
 
-def monitor(channels, paths, tracking=None, callback=None):
+def monitor(channels, paths, tracking=None, tracking_timeout=None, callback=None):
     """
     Monitors all files reachable from `paths` for changes. When a change occurs
     interested `channels` are notified which will in turn parse newly added
@@ -222,13 +232,15 @@ def monitor(channels, paths, tracking=None, callback=None):
     :param tracking: Path to file where tracking information should be stored.
                      If None then a dummy/nop tracker is used which can be
                      useful for debugging. Defaults to None.
+    :param tracking_timeout: Time to wait in seconds to acquire tracking lock.
+                             Defaults to None.
     :param callback: Callable taking no arguments and returns either True or
                      False. If it returns True then monitoring is aborted.
     """
     channel_thds = []
     for channel in channels:
         logger.info('spawning thread for channel "%s"', channel.name)
-        channel_thd = ChannelThread(channel, tracking, forever=True)
+        channel_thd = ChannelThread(channel, tracking, tracking_timeout, forever=True)
         channel_thd.start()
         channel_thds.append(channel_thd)
 

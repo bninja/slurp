@@ -346,11 +346,12 @@ class ChannelThread(threading.Thread):
 
     poll_frequency = 1.0
 
-    def __init__(self, channel, tracking=None, forever=False):
+    def __init__(self, channel, tracking=None, tracking_timeout=None, forever=False):
         super(ChannelThread, self).__init__()
         self.daemon = True
         self.channel = channel
         self.tracking = tracking
+        self.tracking_timeout = tracking_timeout
         self.forever = forever
         self.stop_event = threading.Event()
         self.throttle_event = threading.Event()
@@ -386,7 +387,7 @@ class ChannelThread(threading.Thread):
     def run(self):
         num_events = 0
         if self.tracking:
-            tracker = track.Tracker(self.tracking)
+            tracker = track.Tracker(self.tracking, self.tracking_timeout)
         else:
             tracker = track.DummyTracker()
         try:

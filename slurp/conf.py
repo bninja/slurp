@@ -12,6 +12,9 @@ There are three settings sections:
     # whether to enable (true) or disable (false) tracking, defaults to true
     tracking={flag}
 
+    # timeout in seconds to wait before acquiring tracking lock, defaults to 15.0
+    tracking-timeout={float}
+
     # other configuration files to include, default to none
     includes={comma separated file globs}
 
@@ -135,6 +138,7 @@ def load(path, includes=None, excludes=None):
                  "state_dir": string,
                  "tracking": bool,
                  "tracking_file": string,
+                 "tracking_timeout": float,
                  "channels": [
                      {
                           "name": ,
@@ -178,6 +182,7 @@ def load(path, includes=None, excludes=None):
         conf['tracking'] = ctx.general['tracking']
         if conf['tracking']:
             conf['tracking_file'] = os.path.join(conf['state_dir'], 'tracking.db')
+            conf['tracking_timeout'] = 15.0
 
         ctx.parse = _load_parse(ctx)
 
@@ -320,6 +325,7 @@ def _load_general(ctx):
     p = _SectionParser(ctx, 'general')
     r['state_dir'] = p.string('state_dir')
     r['tracking'] = p.bool('tracking')
+    r['tracking_timeout'] = p.float('tracking-timeout')
     r['includes'] = p.strings('includes', [])
     return r
 
@@ -442,7 +448,7 @@ class _SectionParser(object):
         try:
             return float(r)
         except TypeError:
-            raise _InvalidFieldError(self, name, 'Not an integer')
+            raise _InvalidFieldError(self, name, 'Not a float')
 
     def sink(self, name, default=_NONE):
         r, defaulted = self._raw(name, default)

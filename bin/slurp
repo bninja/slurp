@@ -39,15 +39,15 @@ def configure_syslog():
     fmt = logging.Formatter('slurp[%(process)d]: %(message)s')
     handler.setFormatter(fmt)
     logger.addHandler(handler)
-    
-    
+
+
 def arg_parser():
     common_parser = ArgumentParser(add_help=False)
     common_parser.add_argument('-l', '--log-level',
         choices=['debug', 'info', 'warn', 'error'], default='info',
         metavar='LEVEL', help='Log level.')
     common_parser.add_argument('--enable-syslog',
-        action='store_true',default=False,
+        action='store_true', default=False,
         help='Enable system log.')
     common_parser.add_argument('--disable-stderrlog',
         action='store_true', default=False,
@@ -63,16 +63,16 @@ def arg_parser():
         help='Disables tracking of ingest progress.')
     common_parser.add_argument(
         '--disable-backfill', action='store_true', default=False,
-        help='Disables ingest backfill.')    
+        help='Disables ingest backfill.')
     common_parser.add_argument(
         '--include-channel', dest='include_channels',
         action='append', default=[], metavar='CHANNEL',
-        help='Channels to explicitly include.')    
+        help='Channels to explicitly include.')
     common_parser.add_argument(
         '--exclude-channel', dest='exclude_channels',
         action='append', default=[], metavar='CHANNEL',
         help='Channels to explicitly exclude.')
-    
+
     parents = [common_parser]
     parser = ArgumentParser(
         version=slurp.__version__,
@@ -81,18 +81,18 @@ def arg_parser():
 slurp is a block parser. It iterates over "entries" in append only sources
 (aka files) and sends them along to a sink for further processing. The mapping
 from source to sink is called a channel.""")
-    
+
     sub_parsers = parser.add_subparsers(title='sub-commands')
     seed_arg_parser(sub_parsers, parents)
     touch_arg_parser(sub_parsers, parents)
     monitor_arg_parser(sub_parsers, parents)
-    
+
     return parser
 
 
 def parse_sink(sink):
     if sink == 'stdout':
-        sink = 'file:/dev/stdout' 
+        sink = 'file:/dev/stdout'
     if sink == 'null':
         sink = 'file:/dev/null'
     if sink == 'dbg':
@@ -106,6 +106,7 @@ def load_conf(args):
         args.conf_file, args.include_channels, args.exclude_channels)
     if args.disable_tracking:
         conf['tracking_file'] = None
+        conf['tracking_timeout'] = None
     if args.disable_backfill:
         for channel_conf in conf['channels']:
             channel_conf['backfill'] = False
@@ -113,12 +114,12 @@ def load_conf(args):
     if sink:
         sink = parse_sink(sink)
         for channel_conf in conf['channels']:
-            channel_conf['sink'] = sink 
+            channel_conf['sink'] = sink
     return conf
 
 
 class Flock(object):
-    
+
     def __init__(self, path):
         self.path = path
         self.fo = None
@@ -128,18 +129,18 @@ class Flock(object):
         self.fo = open(self.path, 'w')
         prev_handler = signal.signal(signal.SIGALRM, self._timeout)
         signal.alarm(timeout)
-        try:    
+        try:
             fcntl.flock(self.fo.fileno(), fcntl.LOCK_EX)
         finally:
             signal.alarm(0)
             signal.signal(signal.SIGALRM, prev_handler)
         logger.info('locked %s', self.path)
-    
+
     def release(self):
         logger.info('releasing %s', self.path)
         fcntl.flock(self.fo.fileno(), fcntl.LOCK_UN)
         self.fo.close()
-        
+
     def _timeout(self, signum, frame):
         logger.warning('unable to lock %s', self.path)
 
@@ -164,7 +165,7 @@ def seed(args):
         configure_syslog()
     conf = load_conf(args)
     channels = slurp.create_channels(conf['channels'])
-    slurp.seed(channels, args.paths, conf['tracking_file'])
+    slurp.seed(channels, args.paths, conf['tracking_file'], conf['tracking_timeout'])
 
 
 # touch
@@ -190,7 +191,7 @@ def touch(args):
         configure_syslog()
     conf = load_conf(args)
     channels = slurp.create_channels(conf['channels'])
-    slurp.touch(channels, args.paths, conf['tracking_file'])
+    slurp.touch(channels, args.paths, conf['tracking_file'], conf['tracking_timeout'])
 
 
 # monitor
@@ -221,7 +222,7 @@ Monitors PATHs for changes and triggers ingest by interested channels.""")
         metavar='NAME', help='Force all channels to use a particular sink.')
     parser.set_defaults(command=monitor)
     return parser
-    
+
 
 def monitor(args):
     configure_log(args.log_level)
@@ -246,26 +247,24 @@ def monitor(args):
         pid_file = None
     if not args.disable_stderrlog:
         configure_stderr()
-    if args.daemonize: 
+    if args.daemonize:
         from daemon import DaemonContext
-        with DaemonContext(
-                 pidfile=pid_file,
-                 files_preserve=[],
-                 signal_map=master.signal_map):
-            if args.enable_syslog:
-                configure_syslog()  # NOTE: do this after daemonize
-            if args.lock_file:
-                lock = Flock(args.lock_file)
-                lock.acquire(timeout=args.lock_timeout)
-            try:
-                master(args.paths)
-            except Exception, ex:
-                logger.exception(ex)
-                raise
-            finally:
-                if args.lock_file:
-                    lock.release()
     else:
+        class DaemonContext(object):
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, type_, value, traceback):
+                pass
+
+    with DaemonContext(
+             pidfile=pid_file,
+             files_preserve=[],
+             signal_map=master.signal_map):
         if args.enable_syslog:
             configure_syslog()  # NOTE: do this after daemonize
         if args.lock_file:
@@ -273,9 +272,14 @@ def monitor(args):
             lock.acquire(timeout=args.lock_timeout)
         try:
             master(args.paths)
+        except Exception, ex:
+            if args.daemonize:
+                logger.exception(ex)
+            raise
         finally:
             if args.lock_file:
                 lock.release()
+
 
 # main
 

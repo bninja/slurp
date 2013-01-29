@@ -16,15 +16,18 @@ class Tracker(object):
         Path to file where SQLite database file is stored.
     """
 
-    def __init__(self, db_path):
+    def __init__(self, db_path, timeout=None):
         self.db_path = db_path
+        kwargs = {}
+        if timeout is not None:
+            kwargs['timeout'] = timeout
         logger.debug('connecting to "%s"', self.db_path)
-        self.cxn = sqlite3.connect(db_path)
+        self.cxn = sqlite3.connect(db_path, **kwargs)
         self._init()
 
     def _init(self):
         cur = self.cxn.cursor()
-        cur = cur.execute("""\
+        cur.execute("""\
             CREATE TABLE IF NOT EXISTS tracks (
                 channel TEXT,
                 path TEXT,
