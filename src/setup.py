@@ -21,6 +21,7 @@ setuptools.setup(
     author_email='slurp@egon.gb',
     install_requires=[
         'arrow >=0.4.2,<0.5',
+        'pilo ==0.1',
     ],
     extras_require={
         'es': 'pyes >=0.90.1,<0.91',
