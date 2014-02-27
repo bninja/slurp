@@ -1,0 +1,51 @@
+<1.info> 2014-02-22T00:00:57.133169+00:00 bapi-test-10-3-105-145 balanced-request[29359]: {
+  "user_guid": null,
+  "request": {
+    "url": "http://10.3.105.145:5000/health",
+    "headers": [
+      [
+        "Host",
+        "10.3.105.145:5000"
+      ],
+      [
+        "Connection",
+        "keep-alive"
+      ],
+      [
+        "Accept",
+        "*/*"
+      ],
+      [
+        "User-Agent",
+        "ELB-HealthChecker/1.0"
+      ]
+    ],
+    "method": "GET"
+  },
+  "guru_id": "OHM67be27b09b5411e3b8ca02d299b5d951",
+  "response": {
+    "status": "200 OK",
+    "headers": [
+      [
+        "Content-Type",
+        "text/plain"
+      ],
+      [
+        "X-Balanced-Guru",
+        "OHM67be27b09b5411e3b8ca02d299b5d951"
+      ],
+      [
+        "X-Balanced-Software-Build",
+        "1.0.44"
+      ],
+      [
+        "X-Balanced-Revision",
+        "1.1"
+      ],
+      [
+        "X-Balanced-Host",
+        "bapi-test-10-3-105-145"
+      ]
+    ]
+  }
+}

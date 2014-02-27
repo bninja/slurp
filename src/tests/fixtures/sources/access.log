@@ -1,0 +1,1 @@
+1.2.3.4 - - [20/Feb/2014:16:57:20] "POST /customers HTTP/1.1" 201 1571 "-" "balanced-python/1.0.1beta2" request_time_seconds=0 request_time_microseconds=786032 build=- guru_id=OHM0f8d04769a5011e3b2fa02d299b5d951 merchant_guid=TEST-MRqy7IkgznPCEGv5tbR7j6p marketplace_guid=TEST-MPr1UYje98zTylQKifW0TG9

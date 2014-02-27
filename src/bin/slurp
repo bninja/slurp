@@ -1,0 +1,560 @@
+#!/usr/bin/env python
+"""
+"""
+import argparse
+import logging
+import fnmatch
+import os
+from pprint import pprint
+import re
+import sys
+
+import slurp
+
+
+logger = logging.getLogger('slurp')
+
+
+# all commands
+
+def touch_all_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'touch',
+        parents=parents,
+    )
+    cmd.add_argument(
+        'files',
+        nargs='+',
+        metavar='FILE',
+    )
+    cmd.set_defaults(cmd=touch_all)
+    return cmd
+
+
+def touch_all(args):
+    channels = map(
+        args.config.channel,
+        filter(ChannelFilter(args.includes, args.excludes), args.config.channel_names)
+    )
+    slurp.touch(args.files, channels)
+
+
+def tell_all_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'tell',
+        parents=parents,
+    )
+    cmd.add_argument(
+        'files',
+        nargs='+',
+        metavar='FILE',
+    )
+    cmd.set_defaults(cmd=tell_all)
+    return cmd
+
+
+def tell_all(args):
+    channels = map(
+        args.config.channel,
+        filter(ChannelFilter(args.includes, args.excludes), args.config.channel_names)
+    )
+    slurp.tell(args.files, channels)
+
+
+def reset_all_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'reset',
+        parents=parents,
+    )
+    cmd.add_argument(
+        'files',
+        nargs='+',
+        metavar='FILE',
+    )
+    cmd.set_defaults(cmd=reset_all)
+    return cmd
+
+
+def reset_all(args):
+    channels = map(
+        args.config.channel,
+        filter(ChannelFilter(args.includes, args.excludes), args.config.channel_names)
+    )
+    for file_path in args.files:
+        for channel in channels:
+            source = channel.match(file_path)
+            if not source:
+                continue
+            print file_path, channel.name, source.name, 0
+
+
+def consume_all_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'consume',
+        parents=parents,
+    )
+    cmd.add_argument(
+        'files',
+        nargs='+',
+        metavar='FILE',
+        action=FileAction,
+    )
+    cmd.add_argument(
+        '-d', '--dry',
+        action='store_true',
+    )
+    cmd.add_argument(
+        '-b', '--backfill',
+        action='store_true',
+    )
+    cmd.set_defaults(cmd=consume_all)
+    return cmd
+
+
+def consume_all(args):
+    overrides = {}
+    if args.dry:
+        overrides.update(dry_overrides)
+    if args.backfill:
+        overrides['backfill'] = True
+    channels = map(
+        lambda x: args.config.channel(x, **overrides),
+        filter(ChannelFilter(args.includes, args.excludes), args.config.channel_names)
+    )
+    slurp.consume(args.files, channels)
+    
+
+def watch_all_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'watch',
+        parents=parents,
+    )
+    cmd.add_argument(
+        'paths',
+        nargs='+',
+        metavar='PATH',
+    )
+    cmd.add_argument(
+        '-d', '--dry',
+        action='store_true',
+    )
+    cmd.add_argument(
+        '-b', '--backfill',
+        action='store_true',
+    )
+    cmd.set_defaults(cmd=watch_all)
+    return cmd
+
+
+def watch_all(args):
+    overrides = {}
+    if args.dry:
+        overrides.update(dry_overrides)
+    if args.backfill:
+        overrides['backfill'] = True
+    channels = map(
+        lambda x: args.config.channel(x, **overrides),
+        filter(ChannelFilter(args.includes, args.excludes), args.config.channel_names)
+    )
+    slurp.watch(args.paths, channels)
+
+
+# source commands
+
+def source_list_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'sources',
+        parents=parents,
+    )
+    cmd.set_defaults(cmd=source_list)
+
+
+def source_list(args):
+    for name in args.config.source_names:
+        print name
+
+
+def source_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'source',
+        parents=parents,
+    )
+    cmd.add_argument(
+        'source',
+        nargs=1,
+        metavar='SOURCE',
+    )
+    source_cmds = cmd.add_subparsers(title='source-commands')
+    source_show_parser(source_cmds, parents)
+    return cmd
+
+
+def source_show_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'show',
+        parents=parents,
+    )
+    cmd.set_defaults(cmd=source_show)
+
+def source_show(args):
+    pprint(args.config.source_settings(args.source[0]))
+
+
+# channel commands
+
+def channel_list_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'channels',
+        parents=parents,
+    )
+    cmd.set_defaults(cmd=channel_list)
+
+
+def channel_list(args):
+    for name in args.config.channel_names:
+        print name
+
+
+def channel_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'channel',
+        parents=parents,
+    )
+    cmd.add_argument(
+        'channel',
+        nargs=1,
+        metavar='CHANNEL',
+    )
+    channel_cmds = cmd.add_subparsers(title='channel-commands')
+    channel_show_parser(channel_cmds, parents)
+    channel_touch_parser(channel_cmds, parents)
+    channel_tell_parser(channel_cmds, parents)
+    channel_reset_parser(channel_cmds, parents)
+    channel_edit_parser(channel_cmds, parents)
+    channel_consume_parser(channel_cmds, parents)
+    channel_watch_parser(channel_cmds, parents)
+    return cmd
+
+
+def channel_show_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'show',
+        parents=parents,
+    )
+    cmd.set_defaults(cmd=channel_show)
+
+
+def channel_show(args):
+    pprint({
+        'settings': args.config.channel_settings(args.channel[0]),
+        'tracker': args.config.channel(args.channel[0]).tracker
+    })
+
+
+def channel_touch_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'touch',
+        parents=parents,
+    )
+    cmd.add_argument(
+        'files',
+        nargs='+',
+        metavar='FILE',
+    )
+    cmd.set_defaults(cmd=channel_touch)
+
+
+def channel_touch(args):
+    channels = [args.config.channel(args.channel[0])]
+    slurp.touch(args.files, channels)
+
+
+def channel_tell_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'tell',
+        parents=parents,
+    )
+    cmd.add_argument(
+        'files',
+        nargs='+',
+        metavar='FILE',
+    )
+    cmd.set_defaults(cmd=channel_tell)
+
+
+def channel_tell(args):
+    channels = [args.config.channel(args.channel[0])]
+    slurp.tell(args.files, channels)
+
+
+def channel_reset_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'reset',
+        parents=parents,
+    )
+    cmd.add_argument(
+        'files',
+        nargs='+',
+        metavar='FILE',
+    )
+    cmd.set_defaults(cmd=channel_reset)
+
+
+def channel_reset(args):
+    channels = [args.config.channel(args.channel[0])]
+    slurp.reset(args.files, channels)
+
+def channel_edit_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'edit',
+        parents=parents,
+    )
+    cmd.set_defaults(cmd=channel_edit)
+    
+    
+def channel_edit(args):
+    channel = args.config.channel(args.channel[0])
+    channel.edit()
+
+
+def channel_consume_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'consume',
+        parents=parents,
+    )
+    cmd.add_argument(
+        'files',
+        nargs='+',
+        metavar='FILE',
+        action=FileAction,
+    )
+    cmd.add_argument(
+        '-d', '--dry',
+        action='store_true',
+    )
+    cmd.add_argument(
+        '-b', '--backfill',
+        action='store_true',
+    )
+    cmd.set_defaults(cmd=channel_consume)
+    return cmd
+
+
+def channel_consume(args):
+    overrides = {}
+    if args.dry:
+        overrides.update(dry_overrides)
+    if args.backfill:
+        overrides['backfill'] = True
+    channels = [args.config.channel(args.channel[0], **overrides)]
+    slurp.consume(args.files, channels)
+
+
+def channel_watch_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'watch',
+        parents=parents,
+    )
+    cmd.add_argument(
+        'paths',
+        nargs='+',
+        metavar='PATH',
+    )
+    cmd.add_argument(
+        '-d', '--dry',
+        action='store_true',
+    )
+    cmd.add_argument(
+        '-b', '--backfill',
+        action='store_true',
+    )
+    cmd.set_defaults(cmd=channel_watch)
+    return cmd
+
+
+def channel_watch(args):
+    overrides = {}
+    if args.dry:
+        overrides.update(dry_overrides)
+    if args.backfill:
+        overrides['backfill'] = True
+    channels = [args.config.channel(args.channel[0], **overrides)]
+    slurp.watch(args.paths, channels)
+
+
+# helpers
+
+dry_overrides = {
+    'sink': slurp.Echo('dry'),
+    'track':  False
+}
+
+def load_config(args):
+    if args.config_file:
+        args.config = slurp.Config.from_file(args.config_file)
+    elif os.path.isfile('/etc/slurp/slurp.conf'):
+        args.config = slurp.Config.from_file('/etc/slurp/slurp.conf')
+    else:
+        logger.warning('using empty slurp configuration, missing --conf-file?')
+        args.config = slurp.Config()
+
+
+
+class ChannelFilter(object):
+
+    def __init__(self, includes, excludes):
+        self.includes = map(re.compile, map(fnmatch.translate, includes or []))
+        self.excludes = map(re.compile, map(fnmatch.translate, excludes or []))
+
+    def __call__(self, name):
+        if self.includes:
+            for i in self.includes:
+                if i.match(name):
+                    break
+            else:
+                return False
+        for e in self.excludes:
+            if e.match(name):
+                return False
+        return True
+
+
+class FileAction(argparse.Action):
+    
+    pattern = re.compile(r'(?P<source>.+?)://(?P<path>.+)')
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if isinstance(values, list):
+            values = [self._parse(v) for v in values]
+        else:
+            values = self._parse(values)
+        setattr(namespace, self.dest, values)
+
+    def _parse(self, raw):
+        m = self.pattern.match(raw)
+        if not m:
+            if raw == '-':
+                return sys.stdin
+            return raw
+        source = m.group('source')
+        path = m.group('path')
+        if path == '-':
+            path = sys.stdin
+        return (source, path)
+
+
+# main
+
+def setup_logging(args):
+    if args.log_config:
+        logging.config.dictConfig(eval(open(args.log_config, 'r').read()))
+        logging.getLogger().setLevel(args.log_level)
+    else:
+        logging.basicConfig(
+            level=args.log_level,
+            format='%(asctime)s : %(levelname)s : %(name)s : %(message)s',
+            stream=sys.stderr,
+        )
+
+
+def create_arg_parser():
+
+    class LogLevelAction(argparse.Action):
+
+        mapping = {
+            'd': logging.DEBUG,
+            'debug': logging.DEBUG,
+            'i': logging.INFO,
+            'info': logging.INFO,
+            'w': logging.WARNING,
+            'warn': logging.WARNING,
+            'e': logging.ERROR,
+            'err': logging.ERROR,
+            'error': logging.ERROR,
+        }
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            if isinstance(values, list):
+                values = [self.mapping[v] for v in values]
+            else:
+                values = self.mapping[values]
+            setattr(namespace, self.dest, values)
+
+    cmn = argparse.ArgumentParser(add_help=False)
+    cmn.add_argument(
+        '-l', '--log-level',
+        choices=[
+            'd', 'debug',
+            'i', 'info',
+            'w', 'warn',
+            'e', 'err', 'error'
+        ],
+        default=logging.WARNING,
+        metavar='LEVEL',
+        action=LogLevelAction,
+        help='log LEVEL',
+    )
+    cmn.add_argument(
+        '-g', '--log-conf',
+        dest='log_config',
+        default=None,
+        metavar='FILE',
+        help='log configuration FILE',
+    )
+    cmn.add_argument(
+        '-c', '--conf-file',
+        dest='config_file',
+        metavar='FILE',
+        default=os.getenv('SLURP_CONF', None),
+        help='slurp configuration FILE',
+    )
+    parents = [cmn]
+    
+    parser = argparse.ArgumentParser(
+        version=slurp.__version__,
+        parents=parents,
+        description='',
+    )
+    cmds = parser.add_subparsers(title='commands')
+
+    # all
+    for cmd in [
+            touch_all_parser(cmds, parents),
+            tell_all_parser(cmds, parents),
+            reset_all_parser(cmds, parents),
+            consume_all_parser(cmds, parents),
+            watch_all_parser(cmds, parents),
+        ]:
+        cmd.add_argument(
+            '-i', '--include',
+            dest='includes',
+            action='append',
+            metavar='CHANNEL',
+        )
+        cmd.add_argument(
+            '-e', '-x', '--exclude',
+            dest='excludes',
+            action='append',
+            metavar='CHANNEL',
+        )
+    
+    # source
+    source_list_parser(cmds, parents)
+    source_parser(cmds, parents)
+    
+    # channel
+    channel_list_parser(cmds, parents)
+    channel_parser(cmds, parents)
+
+    return parser
+
+def main():
+    arg_parser = create_arg_parser()
+    args = arg_parser.parse_args()
+    setup_logging(args)
+    load_config(args)
+    return args.cmd(args)
+
+
+if __name__ == '__main__':
+    main()
