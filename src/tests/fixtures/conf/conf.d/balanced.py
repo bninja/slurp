@@ -1,46 +1,4 @@
-"""
-"""
-import collections
-import re
-
 import slurp
-
-
-access = re.compile(r"""
-# ipv4 address
-(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+
-
-# reserved
--\s+
-
-# user
-(?:(?P<user>\w+)|-)\s+
-
-# timestamp
-\[(?P<timestamp>\d{2}\/\w{3}\/\d{4}:\d{2}:\d{2}:\d{2})\]\s+
-
-# request
-"(?:(?P<method>\w+)\s+(?P<uri>.+)\s+HTTP\/(?P<version>\d\.\d)|-)"\s+
-
-# status code
-(?:(?P<status>\d+)|-)\s+
- 
-#  bytes sent
-(?:(?P<bytes>\d+)|-)\s+
- 
-# referrer
-"(?:(?P<referrer>.*?)|-)"\s+
- 
-# user agent
-"(?P<user_agent>.*?)"
- 
-# extras
-(?:\s+(?:
-request_time_seconds=(?:(?P<request_time_secs>\d+)|-)|
-request_time_microseconds=(?:(?P<request_time_usecs>\d+)|-)|
-guru_id=(?:(?P<guru_id>\w+)|-)|
-\w+=.+?))*
-""", re.VERBOSE)
 
 
 class AccessPayload(slurp.form.Form):
@@ -108,15 +66,6 @@ class AccessSearch(slurp.form.Form):
 
 
 # sentry
-
-sentry =  re.compile(r"""
-\<(?P<facility>\d+).(?P<severity>\w+)\>\s+
-(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}\+\d{2}:\d{2})
-(?P<host>.+?)\s+
-(?P<tag>.+?)(?:\[(?P<process>\d+)\])?:\s+
-(?P<project>\d+):\s+
-(?P<message>.*)
-""", re.VERBOSE)
 
 
 class Sentry(slurp.form.Form):

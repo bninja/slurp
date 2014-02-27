@@ -22,6 +22,9 @@ class ChannelSettings(settings.Form):
     strict = settings.Boolean(default=False)
 
     #:
+    filter = settings.Code(default=None)
+
+    #:
     form = settings.Code(default=None)
 
     #:
@@ -29,9 +32,6 @@ class ChannelSettings(settings.Form):
     
     #: 
     backfill = settings.Boolean(default=False)
-
-    #:
-    enable = settings.Boolean(default=True)
 
     #:
     sources = settings.List(settings.String(), default=[])
@@ -76,8 +76,8 @@ class Channel(object):
     def __init__(self,
             name,
             sink,
-            enable=True,
             sources=None,
+            filter=None,
             form=None,
             state_dir=None,
             strict=ChannelSettings.strict.default,
@@ -89,11 +89,11 @@ class Channel(object):
             throttle_cap=ChannelSettings.throttle_cap.default,
         ):
         self.name = name
-        self.enable = enable
         self.state_dir = state_dir
         self.sources = sources or []
         self.sink = sink
         self.batch_size = batch_size
+        self.filter = filter
         self.form = form
         if track:
             track_path = os.path.join(self.state_dir, self.name + '.track')
@@ -310,7 +310,7 @@ class ChannelSource(Source):
 
     def open(self, path):
         if not self.match(path):
-            raise ValueError('"{}" does not match pattern "{}"'.format(
+            raise ValueError('"{0}" does not match pattern "{1}"'.format(
                 path, self.glob.pattern
             ))
         logger.debug('%s:%s opening "%s"', self.channel.name, self.name, path)
@@ -333,10 +333,15 @@ class ChannelSource(Source):
                     if self.strict:
                         raise ValueError()
                     logger.warning(
-                        '%s:%s %s @ %s - %s',
-                        self.channel.name, self.name, fo.name, offset, errors[0]
+                        '%s:%s @ %s failed - %s',
+                        self.channel.name, self.name, offset, errors[0]
                     )
                     continue
+            if self.filter and not not self.filter(form, offset):
+                logger.warning(
+                    '%s:%s @ %s filtered', self.channel.name, self.name, offset
+                )
+                continue
             yield form, offset
             
     def consume(self, path):
@@ -354,7 +359,7 @@ class ChannelSource(Source):
                         adjust = self.channel.sink(form, offset)
                         if offset:
                             offset = adjust
-                            logger.info('%s:%s consume %s @ %s', self.channel.name, self.name, path, offset)
+                            logger.info('%s:%s consume @ %s', self.channel.name, self.name, offset)
                             self.seek(path, offset.end)
                 except KeyboardInterrupt:
                     raise
@@ -367,7 +372,7 @@ class ChannelSource(Source):
                     adjust = self.channel.sink.flush()
                     if adjust:
                         offset = adjust
-                        logger.info('%s:%s consume %s @ %s', self.channel.name, self.name, path, offset)
+                        logger.info('%s:%s consume @ %s', self.channel.name, self.name, offset)
                         self.seek(path, offset.end)
                 break
         if not offset:

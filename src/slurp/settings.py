@@ -1,7 +1,8 @@
 from ConfigParser import ConfigParser
+import inspect
+import logging
 import re
 import shlex
-import logging
 
 import pilo
 
@@ -52,58 +53,106 @@ class Glob(pilo.fields.String):
 
 
 class Pattern(pilo.Field):
+    
+    def __init__(self, *args, **kwargs):
+        self.flags = kwargs.pop('flags', 0)
+        super(Pattern, self).__init__(*args, **kwargs)
 
     def _parse(self, value):
         parsed = super(Pattern, self)._parse(value)
-        return re.compile(parsed)
-    
-    
+        return re.compile(parsed, self.flags)
+
+
 class Code(String):
+    
+    pattern = re.compile('(?:(?P<module>[\w\.]+):)?(?P<attr>[\w\.]+)')
+    
+    
+    def as_callable(self, sig=None):
+        arg_spec = inspect.getargspec(sig) if sig else None
 
-    def _parse(self, value):
-        # crack
-        pattern = '(?:(?P<module>[\w\.]+):)?(?P<attr>[\w\.]+)'
-        match = re.match(pattern, value)
-        if not match:
-            self.ctx.errors.invalid(
-                self.ctx.field, 'does not match pattern "{0}"'.format(pattern)
-            )
-            return pilo.ERROR
-        name = match.group('module')
-        attr = match.group('attr')
-
-        # module
-        if name is None:
-            module = self.ctx.config.builtin_ext
-        elif name in self.ctx.config.exts:
-            module = self.ctx.config.exts[name]
-            if module is None:
+        def validate(self, value):
+            if not callable(value):
                 self.ctx.errors.invalid(
-                    self.ctx.field, 'could not load extension {0}'.format(name)
+                    self.ctx.field, '"{0}" is not callable'.format(value)
                 )
-                return pilo.ERROR
-        else:
-            try:
-                module = __import__(name)
-            except Exception, ex:
+            if arg_spec and not inspect.getargspec(value) != arg_spec:
                 self.ctx.errors.invalid(
                     self.ctx.field,
-                    'unable to import {0} - {1}\n'.format(module, ex)
+                    '"{0}" does not match signature {1}'.format(value, arg_spec)
                 )
-                return pilo.ERROR
+                return False
+            return True
+    
+    def as_class(self, *clses):
+        
+        def validate(self, value):
+            if value:
+                if not inspect.isclass(value):
+                    self.ctx.errors.invalid(
+                        self.ctx.field, '"{0}" is not a class'.format(value)
+                    )
+                    return False
+                if not any(issubclass(value, cls) for cls in clses):
+                    self.ctx.errors.invalid(
+                        self.ctx.field,
+                        '"{0}" is not a sub-class of {1}'.format(value, list(clses))
+                    )
+                    return False
+            return True
+
+        return self.validate.attach(self)(validate)
+    
+    @classmethod
+    def match(cls, value):
+        match = cls.pattern.match(value)
+        if not match:
+            return False
+        return match.group('module'), match.group('attr')
+
+    @classmethod
+    def load(cls, name, attr):
+        # module
+        if name is None:
+            module = ctx.config.builtin_ext
+        elif name in ctx.config.exts:
+            module = ctx.config.exts[name]
+            if module is None:
+                raise RuntimeError('Could not load extension {0}'.format(name))
+        else:
+            module = __import__(name)
 
         # attribute
         try:
             obj = reduce(getattr, attr.split('.'), module)
         except Exception, ex:
+            raise TypeError('Unable to resolve {1}.{0} - {1}\n'.format(
+                module.__name__, attr, ex
+            ))
+        logger.debug('loaded %s from %s.%s', obj, module.__name__, attr)
+        return obj
+
+    def _parse(self, value):
+        # already
+        if not isinstance(value, basestring):
+            return value
+
+        # crack
+        match = self.match(value)
+        if not match:
             self.ctx.errors.invalid(
-                self.ctx.field,
-                'unable to resolve {0} - {1}\n'.format(attr, ex)
+                self.ctx.field, 'does not match pattern "{0}"'.format(self.pattern.pattern)
             )
             return pilo.ERROR
+        name, attr = match
 
-        logger.debug('loaded %s from %s', obj, value)
-        return obj
+        # load
+        try:
+            return self.load(name, attr)
+        except Exception, ex:
+            name, attr = match
+            self.ctx.errors.invalid(self.ctx.field, str(ex))
+            return pilo.ERROR
 
 
 class Source(pilo.Source):  

@@ -1,5 +1,71 @@
 """
+A source defined a category of `Block` file and how to structure individual
+blocks. To do that you say how to:
+
+    - delimit a block (either a terminal or a prefix regex and a terminal)
+    - extract named text fields from a block using a regex to a dict
+    - optionally how to map the dict to something more type-ful
+
+And that's a source. Here's how you might describe a line-oriented block file
+where blocks represent HTTP accesses to some service:
+
+.. code::
+
+    import slurp
+
+    class ServiceAccess(slurp.Form):
+    
+        ip = slurp.form.String()
+        user = slurp.form.String(default=None)
+        timestamp = slurp.form.Datetime(format='DD/MMM/YYYY:HH:mm:ss')
+        method = slurp.form.String(default=None)
+        uri = slurp.form.String(default=None)
+        version = slurp.form.String(default=None)
+        status = slurp.form.Integer(default=None)
+        bytes = slurp.form.Integer(default=0)
+
+
+    settings = slurp.SourceSettings(
+        globs=['*/some-access', 'some-access'],
+        terminal='\n',
+        strict=True,
+        pattern='''
+(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+
+-\s+
+(?:(?P<user>\w+)|-)\s+
+\[(?P<timestamp>\d{2}\/\w{3}\/\d{4}:\d{2}:\d{2}:\d{2})\]\s+
+"(?:(?P<method>\w+)\s+(?P<uri>.+)\s+HTTP\/(?P<version>\d\.\d)|-)"\s+
+(?:(?P<status>\d+)|-)\s+
+(?:(?P<bytes>\d+)|-)\s+
+"(?:(?P<referrer>.*?)|-)"\s+
+"(?P<user_agent>.*?)"
+        ''',
+        form=ServiceAccess,
+    )
+    
+    source = slurp.Source('my-service-source', **settings)
+  
+  
+and now you can use it like:
+
+.. code::
+
+    from StringIO import StringIO
+    from pprint import pprint
+
+    path = '/tmp/logs/some-access'
+    assert source.match(path)
+    fo = StringIO('''\
+1.2.3.1 - - [20/Feb/2014:16:57:20] "POST /customers HTTP/1.1" 201 1571 "-" "balanced-python/1.0.1beta2"
+1.2.3.2 - - [20/Feb/2014:16:57:20] "POST /customers HTTP/1.1" 201 1571 "-" "balanced-python/1.0.1beta2"
+1.2.3.3 - - [20/Feb/2014:16:57:20] "POST /customers HTTP/1.1" 201 1571 "-" "balanced-python/1.0.1beta2"
+    ''')
+    pprint(list(source.block(fo)))
+    fo.seek(0)
+    pprint(list(source.forms(fo)))
+
 """
+
 import fnmatch
 import logging
 import re
@@ -13,63 +79,111 @@ logger = logging.getLogger(__name__)
 
 class SourceSettings(settings.Form):
 
-    #:
-    glob = settings.Glob()
+    #: Glob patterns used to determine whether a path is associated with
+    #: (i.e. matches) this source.
+    globs = settings.List(settings.Glob())
 
-    #:
-    pattern = settings.Code()
+    #: Either a :
+    #:     - regex string
+    #:     - module:attribute string that resolves to a regex string or a
+    #:       compiled regex
+    #: Note that regex strings are treated as verbose (http://docs.python.org/2/library/re.html#re.X).
+    pattern = settings.Pattern(flags=re.VERBOSE)
 
-    #:
-    form = settings.Code(default=None)
+    @pattern.parse
+    def pattern(self, value):
+        match = settings.Code.match(value)
+        if match:
+            try:
+                value = settings.Code.load(*match)
+            except Exception, ex:
+                self.ctx.errors.invalid(self.ctx.field, str(ex))
+                return settings.ERROR
+            if not isinstance(value, basestring):
+                return value
+        return self.ctx.field._parse(value)
 
-    #:
+    #: A module:attribute string that resolve to a callable with this signature:
+    #
+    #: ..code::
+    #
+    #      def filter(form, offset):
+    #          return True
+    #
+    filter = settings.Code(default=None).as_callable(lambda self, form, offset: None)
+
+    #: A module:attribute string that resolves to a :class:`Form`.
+    form = settings.Code(default=None).as_class(form.Form)
+
+    #: A regex string that determines the start of a :class:`Block`. This is
+    #: only needed if blocks cannot be unambiguously delimited by a terminal.
     prefix = settings.Pattern(default=None)
 
-    #:
+    #: A literal string that determines the end of a :class:`Block`.
     terminal = settings.String(default='\n')
 
-    #:
+    #: Flag indicating whether source block parsing must succeeded. If False
+    #: block parse error a logged and the block skipped.
     strict = settings.Boolean(default=False)
 
-    #:
+    #: Size of block reads in bytes.
     read_size = settings.Integer(default=4096)
 
-    #:
+    #: Size of unparsed block buffer in bytes.
     buffer_size = settings.Integer(default=1048576)
 
+    @buffer_size.validate
+    def buffer_size(self, value):
+        if value < self.read_size:
+            self.ctx.errors.invalid(
+                self.ctx.field,
+                'buffer_size {0} must be >= read_size {1}'.format(value, self.read_size),
+            )
+            return False
+        return True
 
 
 class Source(object):
     """
+    A source defines a category of `Block` files and how to map block within
+    those files into something structured (e.g. a dict).
     """
 
     def __init__(self,
             name,
-            glob,
+            globs,
             pattern,
-            terminal=None,
-            prefix=None,
             form=None,
-            backfill=None,
-            strict=None,
-            read_size=None,
-            buffer_size=None,
+            filter=None,
+            terminal=SourceSettings.terminal.default,
+            prefix=SourceSettings.prefix.default,
+            strict=SourceSettings.strict.default,
+            read_size=SourceSettings.read_size.default,
+            buffer_size=SourceSettings.buffer_size.default,
         ):
         self.name = name
-        if isinstance(glob, basestring):
-            glob = re.compile(fnmatch.translate(glob))
-        self.glob = glob
+        self.globs = []
+        if isinstance(globs, basestring):
+            globs = [globs]
+        for glob in globs:
+            if isinstance(glob, basestring):
+                glob = re.compile(fnmatch.translate(glob))
+            self.globs.append(glob)
         self.form = form
+        self.filter = filter
         if isinstance(pattern, basestring):
             pattern = re.compile(pattern)
         self.pattern = pattern
-        self.prefix = prefix or SourceSettings.prefix.default
-        self.terminal = terminal or SourceSettings.terminal.default
-        self.strict = SourceSettings.strict.default if strict is None else strict
-        self.read_size = SourceSettings.read_size.default if read_size is None else read_size
-        self.buffer_size = SourceSettings.buffer_size.default if buffer_size is None else buffer_size
+        self.prefix = prefix
+        self.terminal = terminal
+        self.strict = strict
+        self.read_size = read_size
+        self.buffer_size = buffer_size
 
     def blocks(self, fo):
+        """
+        Creates a block iterator for a file-like object.
+        """
         return Blocks(
             fo=fo,
             strict=self.strict,
@@ -80,26 +194,50 @@ class Source(object):
         )
 
     def forms(self, fo):
+        """
+        Generator for blocks extracted from a file-like object.
+        """
         for raw, offset in self.blocks(fo):
             match = self.pattern.match(raw)
             if not match:
                 if self.strict:
-                    raise ValueError()
-                logger.warning('%s %s @ %s - does not match pattern', self.name, fo.name, offset)
+                    raise ValueError(
+                        '{0} {1} @ {2} - does not match pattern'.format(
+                            self.name, getattr(fo, 'name', '<memory>'), offset,
+                    ))
+                logger.warning(
+                    '%s %s @ %s - does not match pattern',
+                    self.name, getattr(fo, 'name', '<memory>'), offset
+                )
                 continue
-            src = dict(
+            f = dict(
                 (k, str(v)) for k, v in match.groupdict().iteritems() if v is not None
             )
-            with form.ctx(path=fo.name, offset=offset):
-                f = self.form()
-                errors = f(src)
-                if errors:
-                    if self.strict:
-                        raise ValueError()
-                    logger.warning('%s %s @ %s - %s', self.name, fo.name, offset, errors[0])
-                    continue
-                f = f.filter('exclude', inv=True)
-                yield f, offset
+            if self.form:
+                with form.ctx(path=getattr(fo, 'name', '<memory>'), offset=offset):
+                    src = f
+                    f = self.form()
+                    errors = f(src)
+                    if errors:
+                        if self.strict:
+                            raise ValueError('{0} {1} @ {2} - {3}'.format(
+                                self.name, getattr(fo, 'name', '<memory>'), offset, errors[0]
+                            ))
+                        logger.warning(
+                            '%s %s @ %s - %s',
+                            self.name, getattr(fo, 'name', '<memory>'), offset, errors[0]
+                        )
+                        continue
+                    f = f.filter('exclude', inv=True)
+                    if self.filter and not self.filter(f, offset):
+                        continue
+            yield f, offset
     
     def match(self, path):
-        return self.glob.match(path) is not None
+        """
+        Determines whether a path is associated with this source.  
+        """
+        for glob in self.globs:
+            if glob.match(path):
+                return True
+        return False

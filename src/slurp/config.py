@@ -49,7 +49,7 @@ class GlobalSettings(settings.Form):
     def buffer_size(self, value):
         if value < self.read_size:
             self.ctx.errors.invalid(
-                'buffer_size {} must be >= read_size {}'.format(value, self.read_size),
+                'buffer_size {0} must be >= read_size {1}'.format(value, self.read_size),
             )
             return False
         return True

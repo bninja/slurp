@@ -6,7 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-BlockOffset = collections.namedtuple('BlockOffset', ['begin', 'end'])
+BlockOffset = collections.namedtuple('BlockOffset', ['path', 'begin', 'end'])
 
 class Blocks(object):
     """
@@ -89,7 +89,8 @@ class BlockIterator(object):
             result = self._parse(self.eof)
             if result:
                 raw, offset_b, offset_e = result
-                return raw, BlockOffset(begin=offset_b, end=offset_e)
+                offset = BlockOffset(path=getattr(self.fo, 'name', '<memory>'), begin=offset_b, end=offset_e)
+                return raw, offset
         while not self.eof:
             if self.max_buffer_size is None:
                 buf = self.fo.read(self.read_size)
@@ -123,7 +124,8 @@ class BlockIterator(object):
                 logger.info('%s[%s:%s] partial block, discarding', self.fo.name, offset_b, offset_e)
                 self.discard = False
                 continue
-            return raw, BlockOffset(begin=offset_b, end=offset_e)
+            offset = BlockOffset(path=getattr(self.fo, 'name', '<memory>'), begin=offset_b, end=offset_e)
+            return raw, offset
         raise StopIteration()
 
     def _parse(self, eof):

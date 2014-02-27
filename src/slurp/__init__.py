@@ -9,6 +9,7 @@ except ImportError:
 
 from . import settings
 from . import form
+from .form import Form
 from .sink import Sink, SinkSettings, Echo
 from .source import Source, SourceSettings
 from .channel import Channel, ChannelSource, ChannelSettings
@@ -19,6 +20,7 @@ __version__ = '0.9'
 __all__ = [
     'settings',
     'form',
+    'Form',
     'Sink',
     'SinkSettings',
     'Echo',
