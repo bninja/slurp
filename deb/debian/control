@@ -1,0 +1,11 @@
+Source: slurp
+Maintainer: me <me@aitmp.com>
+Section: misc
+Priority: optional
+Standards-Version: 3.7.2.0
+Build-Depends: debhelper (>= 9), python-dev (>= 2.7)
+
+Package: slurp
+Architecture: any
+Description: Slurper
+Depends: ${shlibs:Depends}, python (>= 2.7), adduser

@@ -4,5 +4,5 @@ python:
   - 2.7
 script: nosetests 
 install:
-  - pip install nose mock==0.8 unittest2==0.5.1 --use-mirrors
-  - pip install . --use-mirrors
+  - cd src
+  - python setup.pt test

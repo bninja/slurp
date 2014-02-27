@@ -9,6 +9,7 @@ except ImportError:
 
 from . import settings
 from . import form
+from .block import Block, Blocks
 from .form import Form
 from .sink import Sink, SinkSettings, Echo
 from .source import Source, SourceSettings
@@ -21,6 +22,8 @@ __all__ = [
     'settings',
     'form',
     'Form',
+    'Block',
+    'Blocks',
     'Sink',
     'SinkSettings',
     'Echo',

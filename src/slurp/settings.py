@@ -126,7 +126,7 @@ class Code(String):
         try:
             obj = reduce(getattr, attr.split('.'), module)
         except Exception, ex:
-            raise TypeError('Unable to resolve {1}.{0} - {1}\n'.format(
+            raise TypeError('Unable to resolve {0}.{1} - {1}\n'.format(
                 module.__name__, attr, ex
             ))
         logger.debug('loaded %s from %s.%s', obj, module.__name__, attr)

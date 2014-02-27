@@ -2,9 +2,10 @@ import re
 import setuptools
 
 tests_require = [
-    'nose==1.1.2',
-    'mock==0.8',
-    'unitest2 >= 0.5.1',
+    'nose >=1.1.0',
+    'mock ==0.8',
+    'unittest2 >=0.5.1',
+    'coverage',
 ]
 
 setuptools.setup(

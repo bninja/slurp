@@ -1,10 +1,10 @@
 """
-A source defined a category of `Block` file and how to structure individual
+A source defines a category of `Block` file and how to structure individual
 blocks. To do that you say how to:
 
     - delimit a block (either a terminal or a prefix regex and a terminal)
     - extract named text fields from a block using a regex to a dict
-    - optionally how to map the dict to something more type-ful
+    - optionally map the extract dict to something more type-ful
 
 And that's a source. Here's how you might describe a line-oriented block file
 where blocks represent HTTP accesses to some service:
@@ -197,41 +197,41 @@ class Source(object):
         """
         Generator for blocks extracted from a file-like object.
         """
-        for raw, offset in self.blocks(fo):
-            match = self.pattern.match(raw)
+        for block in self.blocks(fo):
+            match = self.pattern.match(block.raw)
             if not match:
                 if self.strict:
                     raise ValueError(
                         '{0} {1} @ {2} - does not match pattern'.format(
-                            self.name, getattr(fo, 'name', '<memory>'), offset,
+                            self.name, getattr(fo, 'name', '<memory>'), block,
                     ))
                 logger.warning(
                     '%s %s @ %s - does not match pattern',
-                    self.name, getattr(fo, 'name', '<memory>'), offset
+                    self.name, getattr(fo, 'name', '<memory>'), block
                 )
                 continue
             f = dict(
                 (k, str(v)) for k, v in match.groupdict().iteritems() if v is not None
             )
             if self.form:
-                with form.ctx(path=getattr(fo, 'name', '<memory>'), offset=offset):
+                with form.ctx(path=getattr(fo, 'name', '<memory>'), offset=block):
                     src = f
                     f = self.form()
                     errors = f(src)
                     if errors:
                         if self.strict:
                             raise ValueError('{0} {1} @ {2} - {3}'.format(
-                                self.name, getattr(fo, 'name', '<memory>'), offset, errors[0]
+                                self.name, getattr(fo, 'name', '<memory>'), block, errors[0]
                             ))
                         logger.warning(
                             '%s %s @ %s - %s',
-                            self.name, getattr(fo, 'name', '<memory>'), offset, errors[0]
+                            self.name, getattr(fo, 'name', '<memory>'), block, errors[0]
                         )
                         continue
                     f = f.filter('exclude', inv=True)
-                    if self.filter and not self.filter(f, offset):
-                        continue
-            yield f, offset
+            if self.filter and not self.filter(f, block):
+                continue
+            yield f, block
     
     def match(self, path):
         """

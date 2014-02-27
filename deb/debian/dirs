@@ -1,0 +1,3 @@
+etc/slurp/routers.d
+var/lib/slurp
+var/log/slurp

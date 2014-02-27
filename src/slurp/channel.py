@@ -359,8 +359,12 @@ class ChannelSource(Source):
                         adjust = self.channel.sink(form, offset)
                         if offset:
                             offset = adjust
-                            logger.info('%s:%s consume @ %s', self.channel.name, self.name, offset)
-                            self.seek(path, offset.end)
+                            logger.info(
+                                '%s:%s consume %s[%s:%s]',
+                                self.channel.name, self.name,
+                                offset.path, offset.begin, offset.end
+                            )
+                            self.seek(offset.path, offset.end)
                 except KeyboardInterrupt:
                     raise
                 except Exception, ex:
@@ -372,8 +376,12 @@ class ChannelSource(Source):
                     adjust = self.channel.sink.flush()
                     if adjust:
                         offset = adjust
-                        logger.info('%s:%s consume @ %s', self.channel.name, self.name, offset)
-                        self.seek(path, offset.end)
+                        logger.info(
+                            '%s:%s consume %s[%s:%s]',
+                            self.channel.name, self.name,
+                            offset.path, offset.begin, offset.end
+                        )
+                        self.seek(offset.path, offset.end)
                 break
         if not offset:
             logger.info('%s:%s consume %s nothing', self.channel.name, self.name, path)
@@ -387,7 +395,11 @@ class ChannelSource(Source):
                     adjust = self.channel.sink(form, offset)
                     if adjust:
                         offset = adjust
-                        logger.info('%s:%s consume %s @ %s', self.channel.name, self.name, fo.name, offset)
+                        logger.info(
+                            '%s:%s consume %s[%s:%s]',
+                            self.channel.name, self.name,
+                            offset.path, offset.begin, offset.end
+                        )
             except KeyboardInterrupt:
                 raise
             except Exception, ex:
@@ -399,7 +411,11 @@ class ChannelSource(Source):
                 adjust = self.channel.sink.flush()
                 if adjust:
                     offset = adjust
-                    logger.info('%s:%s consume %s @ %s', self.channel.name, self.name, fo.name, offset)
+                    logger.info(
+                        '%s:%s consume %s[%s:%s]',
+                        self.channel.name, self.name,
+                        offset.path, offset.begin, offset.end
+                    )
             break
         if not offset:
             logger.info('%s:%s consume %s nothing', self.channel.name, self.name, fo.name)

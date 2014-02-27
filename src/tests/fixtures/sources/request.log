@@ -1,11 +1,11 @@
-<1.info> 2014-02-22T00:00:57.133169+00:00 bapi-test-10-3-105-145 balanced-request[29359]: {
+<1.info> 2014-02-20T11:19:31.365418+00:00 bapi-test-10-3-104-232 balanced-request[28892]: {
   "user_guid": null,
   "request": {
-    "url": "http://10.3.105.145:5000/health",
+    "url": "http://10.3.104.232:5000/health",
     "headers": [
       [
         "Host",
-        "10.3.105.145:5000"
+        "10.3.104.232:5000"
       ],
       [
         "Connection",
@@ -22,7 +22,7 @@
     ],
     "method": "GET"
   },
-  "guru_id": "OHM67be27b09b5411e3b8ca02d299b5d951",
+  "guru_id": "OHMde7cefb09a2011e387ac069b72f5f856",
   "response": {
     "status": "200 OK",
     "headers": [
@@ -32,7 +32,7 @@
       ],
       [
         "X-Balanced-Guru",
-        "OHM67be27b09b5411e3b8ca02d299b5d951"
+        "OHMde7cefb09a2011e387ac069b72f5f856"
       ],
       [
         "X-Balanced-Software-Build",
@@ -44,8 +44,84 @@
       ],
       [
         "X-Balanced-Host",
-        "bapi-test-10-3-105-145"
+        "bapi-test-10-3-104-232"
       ]
     ]
+  }
+}
+<1.info> 2014-02-20T11:36:53.286185+00:00 bapi-test-10-3-104-232 balanced-request[31670]: {
+  "user_guid": "USxxxxxxxxxxxxxxxxxxxxxx",
+  "request": {
+    "url": "http://127.0.0.1:5000/marketplaces",
+    "headers": [
+      [
+        "Authorization",
+        "Basic xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ],
+      [
+        "Accept",
+        "application/vnd.api+json;revision=1.1"
+      ],
+      [
+        "Host",
+        "127.0.0.1:5000"
+      ],
+      [
+        "Content-Length",
+        "2"
+      ],
+      [
+        "User-Agent",
+        "balanced-python/1.0.1beta2"
+      ],
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Accept-Encoding",
+        "gzip, deflate, compress"
+      ]
+    ],
+    "method": "POST"
+  },
+  "guru_id": "OHM4aead6749a2311e398d6069b72f5f856",
+  "response": {
+    "status": "201 CREATED",
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Content-Length",
+        "1156"
+      ],
+      [
+        "X-Balanced-Guru",
+        "OHM4aead6749a2311e398d6069b72f5f856"
+      ],
+      [
+        "X-Balanced-Software-Build",
+        "1.0.44"
+      ],
+      [
+        "X-Balanced-Revision",
+        "1.1"
+      ],
+      [
+        "X-Balanced-Host",
+        "bapi-test-10-3-104-232"
+      ],
+      [
+        "X-Balanced-Merchant",
+        "TEST-MR2gw65aJvFKph1RvviXqbSS"
+      ],
+      [
+        "X-Balanced-Marketplace",
+        "TEST-MP2hfNOzdNcYKaoO78R6zpbw"
+      ]
+    ],
+    "body": "{\n  \"marketplaces\": [\n    {\n      \"in_escrow\": 0,\n      \"domain_url\": \"example.com\",\n      \"name\": \"Test Marketplace\",\n      \"links\": {\n        \"owner_customer\": \"CU2hgSPogDbB2UwUEeB3wPPw\"\n      },\n      \"href\": \"/marketplaces/TEST-MP2hfNOzdNcYKaoO78R6zpbw\",\n      \"created_at\": \"2014-02-20T11:36:52.124070Z\",\n      \"support_email_address\": \"support@example.com\",\n      \"updated_at\": \"2014-02-20T11:36:52.765060Z\",\n      \"support_phone_number\": \"+16505551234\",\n      \"production\": false,\n      \"meta\": {},\n      \"unsettled_fees\": 0,\n      \"id\": \"TEST-MP2hfNOzdNcYKaoO78R6zpbw\"\n    }\n  ],\n  \"links\": {\n    \"marketplaces.debits\": \"/debits\",\n    \"marketplaces.reversals\": \"/reversals\",\n    \"marketplaces.customers\": \"/customers\",\n    \"marketplaces.credits\": \"/credits\",\n    \"marketplaces.cards\": \"/cards\",\n    \"marketplaces.card_holds\": \"/card_holds\",\n    \"marketplaces.refunds\": \"/refunds\",\n    \"marketplaces.owner_customer\": \"/customers/{marketplaces.owner_customer}\",\n    \"marketplaces.transactions\": \"/transactions\",\n    \"marketplaces.bank_accounts\": \"/bank_accounts\",\n    \"marketplaces.callbacks\": \"/callbacks\",\n    \"marketplaces.events\": \"/events\"\n  }\n}"
   }
 }
