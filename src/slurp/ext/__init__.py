@@ -2,6 +2,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from ..sink import Echo, Drop
+
 try:
     from elasticsearch import ElasticSearch
 except ImportError, ex:

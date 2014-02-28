@@ -10,6 +10,7 @@ import pilo
 __all__ = [
     'Form',
     'Integer',
+    'Float',
     'Boolean',
     'List',
 ]
@@ -42,12 +43,15 @@ Boolean = pilo.fields.Boolean
 
 Integer = pilo.fields.Integer
 
+Float = pilo.fields.Float
+
 List = pilo.fields.List
 
 Dict = pilo.fields.Dict
 
 String = pilo.fields.String
 
+Tuple = pilo.fields.Tuple
 
 class Glob(pilo.fields.String):
 
@@ -65,7 +69,6 @@ class Pattern(pilo.Field):
         try:
             return re.compile(parsed, self.flags)
         except re.error, ex:
-            from ipdb import set_trace; set_trace()
             self.ctx.errors.invalid(str(ex))
             return ERROR
 

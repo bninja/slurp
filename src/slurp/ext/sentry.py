@@ -31,4 +31,3 @@ class Sentry(Sink):
                 'Unknown project {0}, expected one of {1}'.format(form['project'], self.clis.keys())
             )
         self.clis[form['project']].send_encoded(form['message'])
-        return offset

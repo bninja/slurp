@@ -3,8 +3,6 @@ from slurp.channel import Tracker
 from . import TestCase
 
 
-
-
 class TestTracker(TestCase):
 
     def test_persist(self):

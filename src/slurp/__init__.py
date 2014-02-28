@@ -13,7 +13,7 @@ from .block import Block, Blocks
 from .form import Form
 from .sink import Sink, SinkSettings, Echo
 from .source import Source, SourceSettings
-from .channel import Channel, ChannelSource, ChannelSettings
+from .channel import Channel, ChannelSource, ChannelSettings, ChannelEvent
 from .config import Config
 
 __version__ = '0.9'
@@ -29,7 +29,9 @@ __all__ = [
     'Echo',
     'Source',
     'SourceSettings',
-    'Channel', 'ChannelSource',
+    'Channel',
+    'ChannelEvent',
+    'ChannelSource',
     'ChannelSettings',
     'Config',
     'touch',
@@ -44,6 +46,7 @@ logger = logging.getLogger(__name__)
 
 def touch(file_paths, channels):
     """
+    Updates and prints consume progress information (i.e. offsets) for files.
     """
     for path in file_paths:
         for channel in channels:
@@ -55,6 +58,7 @@ def touch(file_paths, channels):
 
 def tell(file_paths, channels):
     """
+    Prints consume progress information (i.e. offsets) for files.
     """
     for path in file_paths:
         for channel in channels:
@@ -66,6 +70,7 @@ def tell(file_paths, channels):
 
 def reset(file_paths, channels):
     """
+    Resets and prints consume progress information (i.e. offsets) for files.
     """
     for path in file_paths:
         for channel in channels:
@@ -78,6 +83,14 @@ def reset(file_paths, channels):
 
 def consume(file_paths, channels):
     """
+    Consumes blocks in files. A file path can be:
+
+    -  a path to a file on disk
+    - a (source-name, file-like object) tuple
+    - a file-like object
+
+    If you specify a file-like object without a source (the third option) then
+    there can be only one source associated with channels.
     """
     for path in file_paths:
         matches = 0
@@ -101,7 +114,7 @@ def consume(file_paths, channels):
             else:
                 if len(channel.sources) > 1:
                     raise ValueError(
-                       'Cannot determine channel {} source for {}'.format(channel, path)
+                       'Cannot determine channel {0} source for {1}'.format(channel, path)
                     )
                 source = channel.sources[0]
                 matches += 1
@@ -115,62 +128,72 @@ def consume(file_paths, channels):
 if pyinotify:
 
     class WatchEvent(pyinotify.ProcessEvent):
-        """
-        """
 
         def __init__(self, channels):
             super(WatchEvent, self).__init__()
-            self.channels = channels
+            self.workers = [channel.worker() for channel in channels]
+            for worker in self.workers:
+                worker.daemon = True
+                worker.start()
             self.matches = {}
 
-        def on_update_file(self, path):
+        def match(self, path):
             if path not in self.matches:
                 matches = []
-                for channel in self.channels:
-                    source = channel.match(path)
-                    if source:
-                        matches.append(source)
+                for worker in self.workers:
+                    if worker.match(path) is not None:
+                        matches.append(worker)
                 self.matches[path] = matches or None
-            if self.matches[path]:
-                for source in self.matches[path]:
-                    if source.channel.throttle:
-                        continue
-                    try:
-                        source.consume(path)
-                        source.channel.throttle.reset()
-                    except Exception:
-                        duration = source.channel.throttle()
-                        logger.exception(
-                            'throttling channel %s for %s sec(s)',
-                            source.channel.name, duration,
-                        )
+            return self.matches[path]
 
+        # handlers
+
+        def on_create_file(self, path):
+            workers = self.match(path)
+            if workers:
+                for worker in workers:
+                    worker.enqueue(ChannelEvent.create(path))
+
+        def on_modify_file(self, path):
+            workers = self.match(path)
+            if workers:
+                for worker in workers:
+                    worker.enqueue(ChannelEvent.modify(path))
+
+        def on_delete_file(self, path):
+            workers = self.match(path)
+            if workers:
+                for worker in workers:
+                    worker.enqueue(ChannelEvent.delete(path))
+                self.matches.pop(path, None)
 
         def on_delete_directory(self, path):
             for key in self.matches.keys():
-                key.startwith(path)
-                self.matches.pop(key, None)
+                if key.startswith(path):
+                    self.matches.pop(path)
 
-        def on_delete_file(self, path):
-            self.matches.pop(path, None)
+        # pyinotify.ProcessEvent
 
         def process_default(self, event):
             logger.debug('processing event %s', event)
             path = event.pathname
-            delete = (event.mask & pyinotify.IN_DELETE != 0)
-            directory = (event.mask & pyinotify.IN_ISDIR != 0)
-            if delete:
-                if directory:
-                    self.on_delete_directory(path)
-                else:
-                    self.on_delete_file(path)
-            elif not directory:
-                self.on_update_file(path)
 
+            if event.mask & pyinotify.IN_ISDIR != 0:
+                if event.mask & pyinotify.IN_DELETE != 0:
+                    self.on_delete_directory(path)
+            else:
+                if event.mask & pyinotify.IN_DELETE != 0:
+                    self.on_delete_file(path)
+                if event.mask & pyinotify.IN_CREATE != 0:
+                    self.on_create_file(path)
+                else:
+                    self.on_modify_file(path)
 
 
 def watch(paths, channels, recursive=True, auto_add=True):
     """
+    Monitors paths (files or directories) for changes and consumes blocks from
+    them when changes are detected.
     """
     if not pyinotify:
         raise RuntimeError('Cannot import pyinotify, pip install pyinotify!')

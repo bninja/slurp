@@ -22,32 +22,20 @@ class AccessPayload(slurp.form.Form):
 
     user_agent = slurp.form.String(default=None)
 
-    guru_id = slurp.form.String(default=None)
-
-    request_time_secs = slurp.form.Float().min(0).tag('exclude')
-
-    request_time_usecs = slurp.form.Float().min(0).tag('exclude')
-
     request_time = slurp.form.Float(default=None)
 
-    @request_time.resolve
-    def request_time(self):
-        if any([self.request_time_secs is None, self.request_time_usecs is None]):
-            return slurp.form.NONE
-        return float('%d.%06d' % (
-            self.request_time_secs, self.request_time_usecs,
-        ))
+    guru_id = slurp.form.String(default=None)
 
 
 class Access(slurp.form.Form):
 
-    src_file = slurp.form.String('src.path')
+    src_file = slurp.form.String('block.path').from_context()
 
-    offset_b = slurp.form.Integer('src.offset.begin')
+    offset_b = slurp.form.Integer('block.begin').from_context()
 
-    offset_e = slurp.form.Integer('src.offset.end')
+    offset_e = slurp.form.Integer('block.end').from_context()
 
-    timestamp = slurp.form.Datetime(format='YYYY/MM/DD:HH:mm:ss')
+    timestamp = slurp.form.Datetime(format='DD/MMM/YYYY:HH:mm:ss +mmmm')
 
     payload = slurp.form.SubForm(AccessPayload, None)
 
@@ -75,13 +63,13 @@ class ErrorPayload(slurp.form.Form):
 
 class Error(slurp.form.Form):
 
-    src_file = slurp.form.String('src.path')
+    src_file = slurp.form.String('block.path').from_context()
 
-    offset_b = slurp.form.Integer('src.offset.begin')
+    offset_b = slurp.form.Integer('block.begin').from_context()
 
-    offset_e = slurp.form.Integer('src.offset.end')
+    offset_e = slurp.form.Integer('block.end').from_context()
 
-    timestamp = slurp.form.Datetime(format='YYYY/MM/DD HH:MM:SS')
+    timestamp = slurp.form.Datetime(format='YYYY/MM/DD HH:mm:ss')
 
     severity = slurp.form.String()
 

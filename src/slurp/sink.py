@@ -10,7 +10,7 @@ class Sink(object):
     def __init__(self, name):
         self.name = name
 
-    def __call__(self, form, offset):
+    def __call__(self, form, block):
         raise NotImplementedError()
 
     def flush(self):
@@ -24,6 +24,12 @@ class SinkSettings(settings.Form):
 
 class Echo(Sink):
 
-    def __call__(self, form, offset):
+    def __call__(self, form, block):
         pprint(form)
-        return offset
+        return block
+
+
+class Drop(Sink):
+
+    def __call__(self, form, block):
+        return block

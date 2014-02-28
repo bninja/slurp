@@ -195,17 +195,18 @@ class Source(object):
         """
         Generator for blocks extracted from a file-like object.
         """
+        path = getattr(fo, 'name', '<memory>')
         for block in self.blocks(fo):
             match = self.pattern.match(block.raw)
             if not match:
                 if self.strict:
                     raise ValueError(
-                        '{0} {1} @ {2} - does not match pattern'.format(
-                            self.name, getattr(fo, 'name', '<memory>'), block,
+                        '{0} {1} @ {2} - does not match pattern {3}'.format(
+                             self.name, path, block, self.pattern.pattern
                     ))
-                logger.warning(
-                    '%s %s @ %s - does not match pattern',
-                    self.name, getattr(fo, 'name', '<memory>'), block
+                logger.info(
+                    '%s %s @ %s - does not match pattern "%s"',
+                    self.name, path, block, self.pattern.pattern
                 )
                 continue
             f = dict(
@@ -219,11 +220,10 @@ class Source(object):
                     if errors:
                         if self.strict:
                             raise ValueError('{0} {1} @ {2} - {3}'.format(
-                                self.name, getattr(fo, 'name', '<memory>'), block, errors[0]
+                                self.name, path, block, errors[0]
                             ))
-                        logger.warning(
-                            '%s %s @ %s - %s',
-                            self.name, getattr(fo, 'name', '<memory>'), block, errors[0]
+                        logger.info(
+                            '%s %s @ %s - %s', self.name, path, block, errors[0]
                         )
                         continue
                     f = f.filter('exclude', inv=True)

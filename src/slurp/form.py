@@ -35,7 +35,7 @@ class Datetime(pilo.fields.Datetime):
         try:
             return arrow.get(value, self.format).datetime
         except arrow.parser.ParserError, ex:
-            self.ctx.errors.invalid(self, str(ex))
+            self.ctx.errors.invalid('{0} for "{1}"'.format(str(ex), self.format))
             return pilo.ERROR
 
 
