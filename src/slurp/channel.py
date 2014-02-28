@@ -10,6 +10,11 @@ import subprocess
 import tempfile
 import time
 
+try:
+    import newrelic.agent
+except ImportError:
+    pass
+
 from . import settings, Source, form
 
 
@@ -18,22 +23,34 @@ logger = logging.getLogger(__name__)
 
 class ChannelSettings(settings.Form):
 
-    #:
+    #: Flag indicating whether channel processing errors should be ignored or
+    #: blocking.
     strict = settings.Boolean(default=False)
 
+    #: A module:attribute string that resolve to a callable with this signature:
     #:
-    filter = settings.Code(default=None)
+    #: ..code::
+    #:
+    #:      def filter(form, block):
+    #:          return True
+    #:
+    #: If the call-able returns True for block is processed otherwise it is
+    #: discarded.
+    filter = settings.Code(default=None).as_callable(lambda form, block: None)
 
-    #:
+    #: A module:attribute string that resolves to a :class:`Form`. This is used
+    #: to map forms returned by a source.
     form = settings.Code(default=None)
 
-    #:
+    #: Flag indicating whether source progress information (i.e. offsets)
+    #: should be persisted.
     track = settings.Boolean(default=False)
 
-    #:
+    #: Flag indicating whether newly tracked source files should be processed
+    #: from the beginning of end upon detection.
     backfill = settings.Boolean(default=False)
 
-    #:
+    #: List of `Source` names.
     sources = settings.List(settings.String(), default=[])
 
     @sources.field.parse
@@ -48,16 +65,16 @@ class ChannelSettings(settings.Form):
     #:
     batch_size = settings.Integer(default=64)
 
-    #:
+    #: Initial number of seconds to throttle the channel on error.
     throttle_duration = settings.Integer(default=30)
 
-    #:
+    #: Back-off factor to apply to duration on a repeated error.
     throttle_backoff = settings.Integer(default=2)
 
-    #:
+    #: Maximum throttle duration.
     throttle_cap = settings.Integer(default=1000)
 
-    #:
+    #: `Sink` name.
     sink = settings.String()
 
     @sink.parse
@@ -87,6 +104,7 @@ class Channel(object):
             throttle_duration=ChannelSettings.throttle_duration.default,
             throttle_backoff=ChannelSettings.throttle_backoff.default,
             throttle_cap=ChannelSettings.throttle_cap.default,
+            stats=False,
         ):
         self.name = name
         self.state_dir = state_dir
@@ -97,9 +115,9 @@ class Channel(object):
         self.form = form
         if track:
             track_path = os.path.join(self.state_dir, self.name + '.track')
-            self.tracker = Tracker(track_path)
         else:
-            self.tracker = {}
+            track_path = ':memory:'
+        self.tracker = Tracker(track_path)
         self.backfill = backfill
         self.throttle = Throttle(
             duration=throttle_duration,
@@ -107,6 +125,8 @@ class Channel(object):
             cap=throttle_cap,
         )
         self.strict = strict
+        self.stats = stats
+        self.stats_app = newrelic.agent.application() if self.stats else None
 
     def match(self, path):
         for source in self.sources:
@@ -133,10 +153,7 @@ class Channel(object):
     def edit(self):
         logger.debug('generating state')
         state = {}
-        if not isinstance(self.tracker, dict):
-            state['tracker'] = dict(self.tracker.items())
-        else:
-            logger.info('channel %s tracking is off', self.name)
+        state['tracker'] = dict(self.tracker.items())
         raw = json.dumps(state, indent=4)
 
         raw_fd, raw_path = tempfile.mkstemp(prefix='slurp-')
@@ -163,6 +180,17 @@ class Channel(object):
 
         return True
 
+    def stats_sample(self):
+
+        @contextlib.contextmanager
+        def Dummy(*args, **kwargs):
+            yield
+
+        return (newrelic.agent.BackgroundTask if self.stats else Dummy)(
+            self.stats_app,
+            name=self.name,
+        )
+
 
 class EditForm(form.Form):
 
@@ -171,6 +199,21 @@ class EditForm(form.Form):
 
 class Throttle(object):
     """
+    Bounded back-off throttler used to temporarily disable channel source
+    consumption when e.g. sink errors occur:
+
+    .. code::
+
+        if not source.channel.throttle:
+            try:
+                source.consume(path)
+                source.channel.throttle.reset()
+            except Exception:
+                duration = source.channel.throttle()
+                logger.exception(
+                    'throttling channel %s for %s sec(s)', source.channel.name, duration,
+                )
+
     """
 
     def __init__(self, duration, backoff=0, cap=None):
@@ -206,6 +249,7 @@ class Throttle(object):
 
 class Tracker(collections.MutableMapping):
     """
+    File offset tracking as a mutable map backed by as sqlite db.
     """
 
     def __init__(self, path, timeout=None):
@@ -351,15 +395,50 @@ class ChannelSource(Source):
             return self.consume_stream(path)
 
     def consume_path(self, path):
-        offset = None
-        with self.open(path) as fo:
+        with self.channel.stats_sample():
+            offset = None
+            with self.open(path) as fo:
+                while True:
+                    try:
+                        for form, offset in self.forms(fo):
+                            adjust = self.channel.sink(form, offset)
+                            if adjust:
+                                offset = adjust
+                                self.seek(offset.path, offset.end)
+                    except KeyboardInterrupt:
+                        raise
+                    except Exception, ex:
+                        if self.channel.strict:
+                            raise
+                        logger.exception(ex)
+                        continue
+                    finally:
+                        adjust = self.channel.sink.flush()
+                        if adjust:
+                            offset = adjust
+                            self.seek(offset.path, offset.end)
+                    break
+            if offset:
+                logger.info(
+                    '%s:%s consume %s[%s:%s]',
+                    self.channel.name, self.name, path, offset.begin, offset.end
+                )
+            else:
+                logger.info(
+                    '%s:%s consume %s[-]',
+                    self.channel.name, self.name, path,
+                )
+            return offset
+
+    def consume_stream(self, fo):
+        with self.channel.stats_sample():
+            offset = None
             while True:
                 try:
                     for form, offset in self.forms(fo):
                         adjust = self.channel.sink(form, offset)
-                        if offset:
+                        if adjust:
                             offset = adjust
-                            self.seek(offset.path, offset.end)
                 except KeyboardInterrupt:
                     raise
                 except Exception, ex:
@@ -371,48 +450,16 @@ class ChannelSource(Source):
                     adjust = self.channel.sink.flush()
                     if adjust:
                         offset = adjust
-                        self.seek(offset.path, offset.end)
                 break
-        if offset:
-            logger.info(
-                '%s:%s consume %s[%s:%s]',
-                self.channel.name, self.name, path, offset.begin, offset.end
-            )
-        else:
-            logger.info(
-                '%s:%s consume %s[-]',
-                self.channel.name, self.name, path,
-            )
-        return offset
+            if offset:
+                logger.info(
+                    '%s:%s consume %s[%s:%s]',
+                    self.channel.name, self.name, fo.name, offset.begin, offset.end
+                )
+            else:
+                logger.info(
+                    '%s:%s consume %s[-]',
+                    self.channel.name, self.name, fo.name,
+                )
+            return adjust
 
-    def consume_stream(self, fo):
-        offset = None
-        while True:
-            try:
-                for form, offset in self.forms(fo):
-                    adjust = self.channel.sink(form, offset)
-                    if adjust:
-                        offset = adjust
-            except KeyboardInterrupt:
-                raise
-            except Exception, ex:
-                if self.channel.strict:
-                    raise
-                logger.exception(ex)
-                continue
-            finally:
-                adjust = self.channel.sink.flush()
-                if adjust:
-                    offset = adjust
-            break
-        if offset:
-            logger.info(
-                '%s:%s consume %s[%s:%s]',
-                self.channel.name, self.name, fo.name, offset.begin, offset.end
-            )
-        else:
-            logger.info(
-                '%s:%s consume %s[-]',
-                self.channel.name, self.name, fo.name,
-            )
-        return adjust

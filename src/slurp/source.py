@@ -102,13 +102,13 @@ class SourceSettings(settings.Form):
         return self.ctx.field._parse(value)
 
     #: A module:attribute string that resolve to a callable with this signature:
-    #
+    #:
     #: ..code::
-    #
-    #      def filter(form, offset):
-    #          return True
-    #
-    filter = settings.Code(default=None).as_callable(lambda self, form, offset: None)
+    #:
+    #:      def filter(form, block):
+    #:          return True
+    #:
+    filter = settings.Code(default=None).as_callable(lambda form, block: None)
 
     #: A module:attribute string that resolves to a :class:`Form`.
     form = settings.Code(default=None).as_class(form.Form)

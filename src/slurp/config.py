@@ -71,11 +71,15 @@ class GlobalSettings(settings.Form):
     def state_dir(self, value):
         if value:
             if not os.path.isdir(value):
-                self.ctx.errors.invalid(
-                    self.ctx.field, '"{0}" does not exist'.format(value)
-                )
+                self.ctx.errors.invalid('"{0}" does not exist'.format(value))
                 return False
         return True
+
+    #: Newrelic file.
+    newrelic_file = settings.String(default='newrelic.ini')
+
+    #: Newrelic environment.
+    newrelic_env = settings.String(default=None)
 
     #: Default backfill flag.
     backfill = settings.Boolean(default=False)
@@ -129,6 +133,8 @@ class Config(object):
     def __init__(self,
             includes=None,
             state_dir=GlobalSettings.state_dir.default,
+            newrelic_file=GlobalSettings.newrelic_file.default,
+            newrelic_env=GlobalSettings.newrelic_env.default,
             backfill=GlobalSettings.backfill.default,
             strict=GlobalSettings.strict.default,
             read_size=GlobalSettings.read_size.default,
@@ -140,6 +146,8 @@ class Config(object):
         self.strict = strict
         self.read_size = read_size
         self.buffer_size = buffer_size
+        self.newrelic_file = newrelic_file
+        self.newrelic_env = newrelic_env
 
         # ext
         from slurp import ext
@@ -225,7 +233,7 @@ class Config(object):
             cs.update(overrides)
             return cs
 
-    def channel(self, name, **overrides):
+    def channel(self, name, stats=False, **overrides):
         """
         Loads `Channel` instance for a named channel.
         """
@@ -234,6 +242,7 @@ class Config(object):
         channel = Channel(
             name=name,
             state_dir=self.state_dir,
+            stats=stats,
             **cs
         )
         for name, source in sources:
@@ -255,9 +264,9 @@ class Config(object):
                     self._ext(path)
                     count += 1
                     continue
-                logger.info(
+                logger.debug(
                     'include "%s" does not match "%s" or "%s", skipping ...',
-                    self._conf_re.pattern, self._ext_re.pattern
+                    path, self._conf_re.pattern, self._ext_re.pattern
                 )
             if not count:
                 logger.info('globbing "%s" found nothing', pattern)

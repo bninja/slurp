@@ -22,7 +22,7 @@ If stuff isn't working
 
     $ slurp -l d
 
-will dump deug information to stdout.
+will dump debug information to stdout.
 
 Here's how you'd list channels:
 
@@ -42,7 +42,7 @@ Examining a channel's settings
 
     $ slurp channel my-channel show
     
-Editing a a channel's state:
+Editing a channel's state:
 
 .. code:: bash
 
@@ -51,13 +51,17 @@ Editing a a channel's state:
 Use --help on sub-commands to see usage details. 
 """
 import argparse
-import logging
 import fnmatch
+import logging
 import os
 from pprint import pprint
 import re
 import sys
 
+try:
+    import newrelic.agent
+except ImportError:
+    pass
 import slurp
 
 
@@ -162,6 +166,11 @@ def consume_all_parser(cmds, parents):
         action='store_true',
         help='forces CHANNELs to back-fill FILE(s)',
     )
+    cmd.add_argument(
+        '-s', '--stats',
+        action='store_true',
+        help='enable stats collection',
+    )
     cmd.set_defaults(cmd=consume_all)
     return cmd
 
@@ -172,8 +181,10 @@ def consume_all(args):
         overrides.update(dry_overrides)
     if args.backfill:
         overrides['backfill'] = True
+    if args.stats:
+        init_stats(args)
     channels = map(
-        lambda x: args.config.channel(x, **overrides),
+        lambda x: args.config.channel(x, stats=args.stats, **overrides),
         filter(ChannelFilter(args.includes, args.excludes), args.config.channel_names)
     )
     slurp.consume(args.files, channels)
@@ -200,6 +211,11 @@ def watch_all_parser(cmds, parents):
         action='store_true',
         help='forces CHANNELs to back-fill FILE(s)',
     )
+    cmd.add_argument(
+        '-s', '--stats',
+        action='store_true',
+        help='enable stats collection',
+    )
     cmd.set_defaults(cmd=watch_all)
     return cmd
 
@@ -210,8 +226,10 @@ def watch_all(args):
         overrides.update(dry_overrides)
     if args.backfill:
         overrides['backfill'] = True
+    if args.stats:
+        init_stats(args)
     channels = map(
-        lambda x: args.config.channel(x, **overrides),
+        lambda x: args.config.channel(x, stats=args.stats, **overrides),
         filter(ChannelFilter(args.includes, args.excludes), args.config.channel_names)
     )
     slurp.watch(args.paths, channels)
@@ -463,6 +481,11 @@ def channel_consume_parser(cmds, parents):
         action='store_true',
         help='forces CHANNEL to back-fill FILE(s)',
     )
+    cmd.add_argument(
+        '-s', '--stats',
+        action='store_true',
+        help='enable stats collection',
+    )
     cmd.set_defaults(cmd=channel_consume)
     return cmd
 
@@ -473,7 +496,9 @@ def channel_consume(args):
         overrides.update(dry_overrides)
     if args.backfill:
         overrides['backfill'] = True
-    channels = [args.config.channel(args.channel[0], **overrides)]
+    if args.stats:
+        init_stats(args)
+    channels = [args.config.channel(args.channel[0], stats=args.stats, **overrides)]
     slurp.consume(args.files, channels)
 
 
@@ -498,6 +523,10 @@ def channel_watch_parser(cmds, parents):
         action='store_true',
         help='forces CHANNEL to back-fill FILE(s)',
     )
+    cmd.add_argument(
+        '-s', '--stats',
+        action='store_true',
+    )
     cmd.set_defaults(cmd=channel_watch)
     return cmd
 
@@ -508,7 +537,9 @@ def channel_watch(args):
         overrides.update(dry_overrides)
     if args.backfill:
         overrides['backfill'] = True
-    channels = [args.config.channel(args.channel[0], **overrides)]
+    if args.stats:
+        init_stats(args)
+    channels = [args.config.channel(args.channel[0], stats=args.stats, **overrides)]
     slurp.watch(args.paths, channels)
 
 
@@ -520,14 +551,33 @@ dry_overrides = {
 }
 
 def load_config(args):
-    if args.config_file:
-        args.config = slurp.Config.from_file(args.config_file)
+    if args.conf_file:
+        args.config = slurp.Config.from_file(args.conf_file)
     elif os.path.isfile('/etc/slurp/slurp.conf'):
         args.config = slurp.Config.from_file('/etc/slurp/slurp.conf')
     else:
         logger.warning('using empty slurp configuration, missing --conf-file?')
         args.config = slurp.Config()
 
+
+def init_stats(args):
+    try:
+        newrelic.agent
+    except NameError:
+        raise Exception('newrelic not found, pip install newrelic!')
+    if (not os.path.isfile(args.config.newrelic_file) and
+        os.path.basename(args.config.newrelic_file) == args.config.newrelic_file):
+        newrelic_file = os.path.join(
+            os.path.dirname(args.conf_file),
+            args.config.newrelic_file
+        )
+        if os.path.isfile(newrelic_file):
+            args.config.newrelic_file = newrelic_file
+    logger.info('using newrelic config %s', args.config.newrelic_file)
+    newrelic.agent.initialize(
+        config_file=args.config.newrelic_file,
+        environment=args.config.newrelic_env,
+    )
 
 
 class ChannelFilter(object):
@@ -638,7 +688,7 @@ logging.config.dictConfig
     )
     cmn.add_argument(
         '-c', '--conf-file',
-        dest='config_file',
+        dest='conf_file',
         metavar='FILE',
         default=os.getenv('SLURP_CONF', None),
         help="""\

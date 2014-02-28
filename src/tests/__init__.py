@@ -1,4 +1,5 @@
 import os
+import tempfile
 
 try:
     import unittest
@@ -23,3 +24,7 @@ class TestCase(unittest.TestCase):
     @classmethod
     def read_fixture(cls, *path):
         return cls.open_fixture(*path).read()
+
+    @classmethod
+    def tmp_file(cls):
+        return tempfile.mktemp(prefix='slurp-test-')
