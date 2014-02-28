@@ -23,10 +23,10 @@ request_time_microseconds=(?:(?P<request_time_usecs>\d+)|-)|
 guru_id=(?:(?P<guru_id>\w+)|-)|
 \w+=.+?))*
 """, re.VERBOSE)
-    
-    
+
+
     class Form(slurp.Form):
-        
+
         ip = slurp.form.String()
 
         user = slurp.form.String(default=None)
@@ -69,7 +69,7 @@ guru_id=(?:(?P<guru_id>\w+)|-)|
             ])
             self.assertEqual(extras, set([]))
             self.assertIsInstance(block, slurp.Block)
-        
+
 
     def test_form(self):
         src = slurp.Source(

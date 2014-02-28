@@ -4,10 +4,10 @@ try:
     import unittest
 except ImportError:
     import unittest2 as unittest
-    
-    
+
+
 class TestCase(unittest.TestCase):
-    
+
     @classmethod
     def fixture(cls, *path):
         return os.path.join(

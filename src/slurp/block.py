@@ -4,7 +4,7 @@ A `Block` is any substring within a file-like object defined by:
     - path
     - begin
     - end
-    
+
 and a `Blocks` collection is a file-like object with uniform delimiting that
 allows us to iterate over `Block`s.
 
@@ -37,16 +37,16 @@ to a file-like object and iterate over its `Block`s:
     )
     for block in blocks:
         pprint(block)
-        
-    
 
-or:      
+
+
+or:
 
 .. code::
 
     from pprint import pprint
     import slurp
-    
+
     path = '/my/acess/log'
     blocks = slurp.Blocks(open(path, 'r'), strict=True, terminal='\n')
     for block in blocks:
@@ -70,7 +70,7 @@ Block = collections.namedtuple(
 
 class Blocks(object):
     """
-    Collection of "blocks" backed by a file-like object.  
+    Collection of "blocks" backed by a file-like object.
     """
 
     def __init__(self,
@@ -85,7 +85,7 @@ class Blocks(object):
         :param fo:
             File-like object we are parsing for blocks.
 
-        :param strict: 
+        :param strict:
             Flag indicating whether to fail (True) or ignore (False) malformed
             blocks. Defaults to False.
 
@@ -108,7 +108,7 @@ class Blocks(object):
             self.iter_cls = functools.partial(
                 LineIterator, terminal=terminal
             )
-        
+
     def __iter__(self):
         return self.iter_cls(
             self.fo,

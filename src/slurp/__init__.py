@@ -122,7 +122,7 @@ if pyinotify:
             super(WatchEvent, self).__init__()
             self.channels = channels
             self.matches = {}
-            
+
         def on_update_file(self, path):
             if path not in self.matches:
                 matches = []
@@ -166,7 +166,7 @@ if pyinotify:
                     self.on_delete_file(path)
             elif not directory:
                 self.on_update_file(path)
-                    
+
 
 
 def watch(paths, channels, recursive=True, auto_add=True):

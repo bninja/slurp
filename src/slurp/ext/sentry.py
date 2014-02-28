@@ -6,14 +6,14 @@ from .. import settings, Sink
 
 
 class SentrySettings(settings.Form):
-    
+
     dsns = settings.Dict(settings.String(), settings.String(), 'dsn')
-    
+
     ignore_unknown = settings.Boolean(default=False)
 
 
 class Sentry(Sink):
-    
+
     settings = SentrySettings
 
     def __init__(self, name, dsns, ignore_unknown):

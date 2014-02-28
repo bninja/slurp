@@ -8,7 +8,7 @@ except ImportError, ex:
     logger.warning('unable to load elastic search extension - %s', ex)
 except Exception, ex:
     logger.exception('unable to load elastic search extension\n')
-    
+
 try:
     from sentry import Sentry
 except ImportError, ex:

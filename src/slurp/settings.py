@@ -20,16 +20,18 @@ NONE = pilo.NONE
 
 ERROR = pilo.ERROR
 
+Error = pilo.FieldError
+
 ctx = pilo.ctx
 
 class Form(pilo.Form):
-    
+
     @classmethod
     def from_file(cls, path, section):
         config = ConfigParser()
         with open(path, 'r') as fo:
             config.readfp(fo)
-        src = Source(config, section)
+        src = Source(config, section, path)
         return cls(src)
 
 Field = pilo.Field
@@ -53,21 +55,26 @@ class Glob(pilo.fields.String):
 
 
 class Pattern(pilo.Field):
-    
+
     def __init__(self, *args, **kwargs):
         self.flags = kwargs.pop('flags', 0)
         super(Pattern, self).__init__(*args, **kwargs)
 
     def _parse(self, value):
         parsed = super(Pattern, self)._parse(value)
-        return re.compile(parsed, self.flags)
+        try:
+            return re.compile(parsed, self.flags)
+        except re.error, ex:
+            from ipdb import set_trace; set_trace()
+            self.ctx.errors.invalid(str(ex))
+            return ERROR
 
 
 class Code(String):
-    
+
     pattern = re.compile('(?:(?P<module>[\w\.]+):)?(?P<attr>[\w\.]+)')
-    
-    
+
+
     def as_callable(self, sig=None):
         arg_spec = inspect.getargspec(sig) if sig else None
 
@@ -83,9 +90,9 @@ class Code(String):
                 )
                 return False
             return True
-    
+
     def as_class(self, *clses):
-        
+
         def validate(self, value):
             if value:
                 if not inspect.isclass(value):
@@ -102,7 +109,7 @@ class Code(String):
             return True
 
         return self.validate.attach(self)(validate)
-    
+
     @classmethod
     def match(cls, value):
         match = cls.pattern.match(value)
@@ -125,9 +132,9 @@ class Code(String):
         # attribute
         try:
             obj = reduce(getattr, attr.split('.'), module)
-        except Exception, ex:
-            raise TypeError('Unable to resolve {0}.{1} - {1}\n'.format(
-                module.__name__, attr, ex
+        except AttributeError:
+            raise TypeError('Unable to resolve {0}.{1}\n'.format(
+                module.__name__, attr
             ))
         logger.debug('loaded %s from %s.%s', obj, module.__name__, attr)
         return obj
@@ -151,29 +158,48 @@ class Code(String):
             return self.load(name, attr)
         except Exception, ex:
             name, attr = match
-            self.ctx.errors.invalid(self.ctx.field, str(ex))
+            self.ctx.errors.invalid(str(ex))
             return pilo.ERROR
 
 
-class Source(pilo.Source):  
+class SourcePath(list):
 
-    def __init__(self, config, section):
+    def __init__(self, src, *args, **kwargs):
+        self.src = src
+        super(SourcePath, self).__init__(*args, **kwargs)
+
+    def __str__(self):
+        parts = []
+        if self.src.file_path:
+            parts.append(self.src.file_path)
+        parts.append('[{0}]'.format(self.src.section))
+        field = ''.join(([self[0]] + ['[{0}]'.format(f) for f in self[1:]]))
+        parts.append(field)
+        return ' '.join(parts)
+
+
+
+class Source(pilo.Source):
+
+    def __init__(self, config, section, file_path=None):
         super(Source, self).__init__()
         self.source = config
         self.section = section
+        self.file_path = file_path
         self.parsers = {
             basestring: self._as_string,
             bool: self._as_boolean,
             int: self._as_integer,
             float: self._as_float,
         }
-        
-    def path(self, key):
+
+    def path(self, key=None):
+        src_path = getattr(pilo.ctx, 'src_path', None)
+        if src_path is None:
+            src_path = SourcePath(self)
         if key in (None, pilo.NONE):
-            path = pilo.ctx.src_path
-        else:
-            path = pilo.ctx.src_path + [key]
-        return path
+            return src_path
+        return SourcePath(self, src_path + [key])
 
     def resolve(self, key):
         path = self.path(key)
@@ -193,7 +219,7 @@ class Source(pilo.Source):
             return pilo.NONE
 
         return pilo.NONE
-            
+
     def sequence(self, key):
         if not self.source.has_option(self.section, key):
             return pilo.NONE

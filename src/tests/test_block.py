@@ -7,7 +7,7 @@ from . import TestCase
 
 
 class TestBlocks(TestCase):
-    
+
     def test_offset(self):
         blocks = slurp.Blocks(self.open_fixture('sources', 'access.log'))
         self.assertEqual(blocks.tell(), 0)

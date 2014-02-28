@@ -1,6 +1,6 @@
 """
 A source defines a category of `Block` file and how to structure individual
-blocks. To do that you say how to:
+blocks within it. To do that you say how to:
 
     - delimit a block (either a terminal or a prefix regex and a terminal)
     - extract named text fields from a block using a regex to a dict
@@ -14,7 +14,7 @@ where blocks represent HTTP accesses to some service:
     import slurp
 
     class ServiceAccess(slurp.Form):
-    
+
         ip = slurp.form.String()
         user = slurp.form.String(default=None)
         timestamp = slurp.form.Datetime(format='DD/MMM/YYYY:HH:mm:ss')
@@ -42,10 +42,10 @@ where blocks represent HTTP accesses to some service:
         ''',
         form=ServiceAccess,
     )
-    
+
     source = slurp.Source('my-service-source', **settings)
-  
-  
+
+
 and now you can use it like:
 
 .. code::
@@ -65,13 +65,11 @@ and now you can use it like:
     pprint(list(source.forms(fo)))
 
 """
-
 import fnmatch
 import logging
 import re
 
-from . import settings, form
-from .block import Blocks
+from . import settings, form, Blocks
 
 
 logger = logging.getLogger(__name__)
@@ -97,7 +95,7 @@ class SourceSettings(settings.Form):
             try:
                 value = settings.Code.load(*match)
             except Exception, ex:
-                self.ctx.errors.invalid(self.ctx.field, str(ex))
+                self.ctx.errors.invalid(str(ex))
                 return settings.ERROR
             if not isinstance(value, basestring):
                 return value
@@ -214,7 +212,7 @@ class Source(object):
                 (k, str(v)) for k, v in match.groupdict().iteritems() if v is not None
             )
             if self.form:
-                with form.ctx(path=getattr(fo, 'name', '<memory>'), offset=block):
+                with form.ctx(block=block):
                     src = f
                     f = self.form()
                     errors = f(src)
@@ -232,10 +230,10 @@ class Source(object):
             if self.filter and not self.filter(f, block):
                 continue
             yield f, block
-    
+
     def match(self, path):
         """
-        Determines whether a path is associated with this source.  
+        Determines whether a path is associated with this source.
         """
         for glob in self.globs:
             if glob.match(path):

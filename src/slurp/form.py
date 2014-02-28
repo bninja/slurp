@@ -25,11 +25,11 @@ Field = pilo.Field
 SubForm = pilo.fields.SubForm
 
 class Datetime(pilo.fields.Datetime):
-    
+
     def __init__(self, *args, **kwargs):
         self.format = kwargs.pop('format')
         super(Datetime, self).__init__(*args, **kwargs)
-        
+
     def _parse(self, value):
         value = self.ctx.src.parse(self.src, value, basestring)
         try:

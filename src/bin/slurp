@@ -1,5 +1,54 @@
 #!/usr/bin/env python
 """
+Command line interface for interacting with a slurp installation.
+
+The most important thing is the conf file which defaults to:
+
+    - /etc/slurp/slurp.conf
+    
+If you're conf file is elsewhere, e.g. /opt/slurp/slurp.conf, then:
+
+.. code:: bash
+
+    $ export SLURP_CONF=/opt/slurp/slurp.conf
+    
+or explicitly specify it when running commands:
+
+.. code:: bash
+    
+    $ slurp -c /etc/slurp/slurp.conf ...
+
+If stuff isn't working 
+
+    $ slurp -l d
+
+will dump deug information to stdout.
+
+Here's how you'd list channels:
+
+.. code:: bash
+
+    $ slurp channels
+    
+and sources
+    
+.. code:: bash
+
+    $ slurp sources
+    
+Examining a channel's settings
+
+.. code:: bash
+
+    $ slurp channel my-channel show
+    
+Editing a a channel's state:
+
+.. code:: bash
+
+    $ slurp channel my-channel edit
+
+Use --help on sub-commands to see usage details. 
 """
 import argparse
 import logging
@@ -21,6 +70,7 @@ def touch_all_parser(cmds, parents):
     cmd = cmds.add_parser(
         'touch',
         parents=parents,
+        description='Updates offset information for FILE(s).',
     )
     cmd.add_argument(
         'files',
@@ -43,6 +93,7 @@ def tell_all_parser(cmds, parents):
     cmd = cmds.add_parser(
         'tell',
         parents=parents,
+        description='Reports offset information for FILE(s).',
     )
     cmd.add_argument(
         'files',
@@ -65,6 +116,7 @@ def reset_all_parser(cmds, parents):
     cmd = cmds.add_parser(
         'reset',
         parents=parents,
+        description='Resets offset information for FILE(s).',
     )
     cmd.add_argument(
         'files',
@@ -92,6 +144,7 @@ def consume_all_parser(cmds, parents):
     cmd = cmds.add_parser(
         'consume',
         parents=parents,
+        description='Consumes all available blocks for FILE(s).',
     )
     cmd.add_argument(
         'files',
@@ -102,10 +155,12 @@ def consume_all_parser(cmds, parents):
     cmd.add_argument(
         '-d', '--dry',
         action='store_true',
+        help='short circuits CHANNELs to only print processed blocks',
     )
     cmd.add_argument(
         '-b', '--backfill',
         action='store_true',
+        help='forces CHANNELs to back-fill FILE(s)',
     )
     cmd.set_defaults(cmd=consume_all)
     return cmd
@@ -128,6 +183,7 @@ def watch_all_parser(cmds, parents):
     cmd = cmds.add_parser(
         'watch',
         parents=parents,
+        description='Monitors PATH(s) and consumes blocks from modified files.',
     )
     cmd.add_argument(
         'paths',
@@ -137,10 +193,12 @@ def watch_all_parser(cmds, parents):
     cmd.add_argument(
         '-d', '--dry',
         action='store_true',
+        help='short circuits CHANNELs to only print processed blocks',
     )
     cmd.add_argument(
         '-b', '--backfill',
         action='store_true',
+        help='forces CHANNELs to back-fill FILE(s)',
     )
     cmd.set_defaults(cmd=watch_all)
     return cmd
@@ -165,6 +223,7 @@ def source_list_parser(cmds, parents):
     cmd = cmds.add_parser(
         'sources',
         parents=parents,
+        description='Prints all SOURCE names.'
     )
     cmd.set_defaults(cmd=source_list)
 
@@ -186,6 +245,7 @@ def source_parser(cmds, parents):
     )
     source_cmds = cmd.add_subparsers(title='source-commands')
     source_show_parser(source_cmds, parents)
+    source_consume_parser(source_cmds, parents)
     return cmd
 
 
@@ -193,11 +253,69 @@ def source_show_parser(cmds, parents):
     cmd = cmds.add_parser(
         'show',
         parents=parents,
+        description='Prints named SOURCE settings.'
     )
     cmd.set_defaults(cmd=source_show)
 
+
 def source_show(args):
     pprint(args.config.source_settings(args.source[0]))
+    
+
+def source_consume_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'consume',
+        parents=parents,
+        description='Processes FILE blocks for SOURCE and prints them.'
+    )
+    cmd.set_defaults(cmd=source_consume)
+    cmd.add_argument(
+        'file',
+        nargs=1,
+        metavar='FILE',
+        help='FILE to process, if - will read from stdin',
+    )
+    cmd.add_argument(
+        '-b', '--begin', '--begin-offset',
+        dest='begin',
+        type=int,
+        default=None,
+        metavar='OFFSET',
+        help='OFFSET into FILE to being processing',
+    )
+    cmd.add_argument(
+        '-e', '--end', '--end-offset',
+        dest='end',
+        type=int,
+        default=None,
+        metavar='OFFSET',
+        help='OFFSET into FILE to end processing',
+    )
+    cmd.add_argument(
+        '--count',
+        type=int,
+        default=None,
+        help='maximum number of blocks to process',
+    )
+    return cmd
+
+
+def source_consume(args):
+    source = args.config.source(args.source[0])
+    if args.file[0] == '-':
+        fo = sys.stdin
+    else:
+        fo = open(args.file[0], 'r')
+    if args.begin:
+        fo.seek(args.begin)
+    for i, (form, block) in enumerate(source.forms(fo)):
+        pprint(form)
+        if args.count and i + 1 == args.count:
+            logger.debug('%s consumed %s, exiting', source.name, i)
+            break
+        if args.end and block.end >= args.end:
+            logger.debug('%s consumed past offset %s, exiting', source.name, block.end)
+            break
 
 
 # channel commands
@@ -206,6 +324,7 @@ def channel_list_parser(cmds, parents):
     cmd = cmds.add_parser(
         'channels',
         parents=parents,
+        description='Prints all CHANNEL names'
     )
     cmd.set_defaults(cmd=channel_list)
 
@@ -240,6 +359,7 @@ def channel_show_parser(cmds, parents):
     cmd = cmds.add_parser(
         'show',
         parents=parents,
+        description='Prints named CHANNEL settings.'
     )
     cmd.set_defaults(cmd=channel_show)
 
@@ -255,6 +375,7 @@ def channel_touch_parser(cmds, parents):
     cmd = cmds.add_parser(
         'touch',
         parents=parents,
+        description='Updates offset information for FILE(s) associated with CHANNEL.',
     )
     cmd.add_argument(
         'files',
@@ -273,6 +394,7 @@ def channel_tell_parser(cmds, parents):
     cmd = cmds.add_parser(
         'tell',
         parents=parents,
+        description='Reports offset information for FILE(s) associated with CHANNEL.',
     )
     cmd.add_argument(
         'files',
@@ -291,6 +413,7 @@ def channel_reset_parser(cmds, parents):
     cmd = cmds.add_parser(
         'reset',
         parents=parents,
+        description='Resets offset information for FILE(s) associated with CHANNEL.',
     )
     cmd.add_argument(
         'files',
@@ -308,6 +431,7 @@ def channel_edit_parser(cmds, parents):
     cmd = cmds.add_parser(
         'edit',
         parents=parents,
+        description='Edits CHANNEL state (e.g. offset information, etc).',
     )
     cmd.set_defaults(cmd=channel_edit)
     
@@ -321,6 +445,7 @@ def channel_consume_parser(cmds, parents):
     cmd = cmds.add_parser(
         'consume',
         parents=parents,
+        description='Consumes all available blocks for FILE(s) associated with CHANNEL.',
     )
     cmd.add_argument(
         'files',
@@ -331,10 +456,12 @@ def channel_consume_parser(cmds, parents):
     cmd.add_argument(
         '-d', '--dry',
         action='store_true',
+        help='short circuits CHANNEL to only print processed blocks',
     )
     cmd.add_argument(
         '-b', '--backfill',
         action='store_true',
+        help='forces CHANNEL to back-fill FILE(s)',
     )
     cmd.set_defaults(cmd=channel_consume)
     return cmd
@@ -354,6 +481,7 @@ def channel_watch_parser(cmds, parents):
     cmd = cmds.add_parser(
         'watch',
         parents=parents,
+        description='Monitors PATH(s) and consumes blocks from modified FILE(s) associated with CHANNEL.',
     )
     cmd.add_argument(
         'paths',
@@ -363,10 +491,12 @@ def channel_watch_parser(cmds, parents):
     cmd.add_argument(
         '-d', '--dry',
         action='store_true',
+        help='short circuits CHANNEL to print processed blocks',
     )
     cmd.add_argument(
         '-b', '--backfill',
         action='store_true',
+        help='forces CHANNEL to back-fill FILE(s)',
     )
     cmd.set_defaults(cmd=channel_watch)
     return cmd
@@ -463,11 +593,13 @@ def create_arg_parser():
 
         mapping = {
             'd': logging.DEBUG,
+            'dbg': logging.DEBUG,
             'debug': logging.DEBUG,
             'i': logging.INFO,
             'info': logging.INFO,
             'w': logging.WARNING,
             'warn': logging.WARNING,
+            'warning': logging.WARNING,
             'e': logging.ERROR,
             'err': logging.ERROR,
             'error': logging.ERROR,
@@ -499,21 +631,29 @@ def create_arg_parser():
         dest='log_config',
         default=None,
         metavar='FILE',
-        help='log configuration FILE',
+        help="""\
+log conf FILE, should be a python file that evals to a dict suitable for
+logging.config.dictConfig
+""",
     )
     cmn.add_argument(
         '-c', '--conf-file',
         dest='config_file',
         metavar='FILE',
         default=os.getenv('SLURP_CONF', None),
-        help='slurp configuration FILE',
+        help="""\
+conf FILE, defaults to $SLURP_CONF or /etc/slurp/slurp.conf
+""",
     )
     parents = [cmn]
     
     parser = argparse.ArgumentParser(
         version=slurp.__version__,
         parents=parents,
-        description='',
+        description="""\
+Slurps block sources into sinks. Parsing, mapping and filtering them along the
+way. See https://github.com/bninja/slurp.
+""",
     )
     cmds = parser.add_subparsers(title='commands')
 
@@ -530,12 +670,14 @@ def create_arg_parser():
             dest='includes',
             action='append',
             metavar='CHANNEL',
+            help='name or glob patttern of CHANNEL(s) to include',
         )
         cmd.add_argument(
             '-e', '-x', '--exclude',
             dest='excludes',
             action='append',
             metavar='CHANNEL',
+            help='name or glob patttern of CHANNEL(s) to exclude',
         )
     
     # source

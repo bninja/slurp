@@ -29,8 +29,8 @@ class ChannelSettings(settings.Form):
 
     #:
     track = settings.Boolean(default=False)
-    
-    #: 
+
+    #:
     backfill = settings.Boolean(default=False)
 
     #:
@@ -38,26 +38,26 @@ class ChannelSettings(settings.Form):
 
     @sources.field.parse
     def sources(self, value):
-        with self.ctx.reset():
-            try:
+        try:
+            with self.ctx.reset():
                 return value, self.ctx.config.source_settings(value)
-            except Exception, ex:
-                self.ctx.errors.invalid(self.ctx.field, str(ex))
-                return settings.ERROR
+        except settings.Error, ex:
+            self.ctx.errors.append(ex)
+            return settings.ERROR
 
     #:
     batch_size = settings.Integer(default=64)
-    
+
     #:
     throttle_duration = settings.Integer(default=30)
-    
+
     #:
     throttle_backoff = settings.Integer(default=2)
-    
+
     #:
     throttle_cap = settings.Integer(default=1000)
 
-    #: 
+    #:
     sink = settings.String()
 
     @sink.parse
@@ -66,7 +66,7 @@ class ChannelSettings(settings.Form):
             try:
                 return self.ctx.config.sink(value)
             except Exception, ex:
-                self.ctx.errors.invalid(self.ctx.field, str(ex))
+                self.ctx.errors.invalid(str(ex))
                 return settings.ERROR
 
 
@@ -112,12 +112,12 @@ class Channel(object):
         for source in self.sources:
             if source.match(path):
                 return source
-    
+
     def add_source(self, *args, **kwargs):
         source = ChannelSource(self, *args, **kwargs)
         self.sources.append(source)
         return source
-    
+
     @property
     def editor(self):
         editors = ['VISUAL', 'EDITOR']
@@ -222,7 +222,7 @@ class Tracker(collections.MutableMapping):
                 """
             )
             self.cxn.commit()
-        
+
     def __getitem__(self, key):
         with contextlib.closing(self.cxn.cursor()) as cur:
             cur.execute("""
@@ -343,7 +343,7 @@ class ChannelSource(Source):
                 )
                 continue
             yield form, offset
-            
+
     def consume(self, path):
         if isinstance(path, basestring):
             return self.consume_path(path)
@@ -359,11 +359,6 @@ class ChannelSource(Source):
                         adjust = self.channel.sink(form, offset)
                         if offset:
                             offset = adjust
-                            logger.info(
-                                '%s:%s consume %s[%s:%s]',
-                                self.channel.name, self.name,
-                                offset.path, offset.begin, offset.end
-                            )
                             self.seek(offset.path, offset.end)
                 except KeyboardInterrupt:
                     raise
@@ -376,15 +371,18 @@ class ChannelSource(Source):
                     adjust = self.channel.sink.flush()
                     if adjust:
                         offset = adjust
-                        logger.info(
-                            '%s:%s consume %s[%s:%s]',
-                            self.channel.name, self.name,
-                            offset.path, offset.begin, offset.end
-                        )
                         self.seek(offset.path, offset.end)
                 break
-        if not offset:
-            logger.info('%s:%s consume %s nothing', self.channel.name, self.name, path)
+        if offset:
+            logger.info(
+                '%s:%s consume %s[%s:%s]',
+                self.channel.name, self.name, path, offset.begin, offset.end
+            )
+        else:
+            logger.info(
+                '%s:%s consume %s[-]',
+                self.channel.name, self.name, path,
+            )
         return offset
 
     def consume_stream(self, fo):
@@ -395,11 +393,6 @@ class ChannelSource(Source):
                     adjust = self.channel.sink(form, offset)
                     if adjust:
                         offset = adjust
-                        logger.info(
-                            '%s:%s consume %s[%s:%s]',
-                            self.channel.name, self.name,
-                            offset.path, offset.begin, offset.end
-                        )
             except KeyboardInterrupt:
                 raise
             except Exception, ex:
@@ -411,12 +404,15 @@ class ChannelSource(Source):
                 adjust = self.channel.sink.flush()
                 if adjust:
                     offset = adjust
-                    logger.info(
-                        '%s:%s consume %s[%s:%s]',
-                        self.channel.name, self.name,
-                        offset.path, offset.begin, offset.end
-                    )
             break
-        if not offset:
-            logger.info('%s:%s consume %s nothing', self.channel.name, self.name, fo.name)
+        if offset:
+            logger.info(
+                '%s:%s consume %s[%s:%s]',
+                self.channel.name, self.name, fo.name, offset.begin, offset.end
+            )
+        else:
+            logger.info(
+                '%s:%s consume %s[-]',
+                self.channel.name, self.name, fo.name,
+            )
         return adjust

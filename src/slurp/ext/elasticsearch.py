@@ -6,16 +6,16 @@ from .. import settings, Sink
 
 
 class ElasticSearchSettings(settings.Form):
-    
+
     connections = settings.List(settings.String())
-    
+
     timeout = settings.Integer(default=10).min(0)
 
     batch_size = settings.Integer(default=0).min(0)
 
 
 class ElasticSearch(Sink):
-    
+
     settings = ElasticSearchSettings
 
     def __init__(self, name, connections, timeout, batch_size):
@@ -25,7 +25,7 @@ class ElasticSearch(Sink):
         self.timeout = timeout
         self.batch_size = batch_size
         self.forms = []
-        
+
     @property
     def es(self):
         if self._es is None:
@@ -40,7 +40,7 @@ class ElasticSearch(Sink):
             id=form.get('id', None),
         )
         return offset
-        
+
     def flush(self):
         offset = None
         while self.forms:
