@@ -33,14 +33,15 @@ class ChannelSettings(settings.Form):
     #: Number of allowable consecutive errors before entering strict mode.
     strict_slack = settings.Integer(default=0).min(0)
 
-    #: A module:attribute string that resolve to a callable with this signature:
+    #: A module:attribute string that resolve to a callable with this
+    #: signature:
     #:
     #: ..code::
     #:
     #:      def filter(form, block):
     #:          return True
     #:
-    #: If the call-able returns True for block is processed otherwise it is
+    #: If the call-able returns True block is processed otherwise it is
     #: discarded.
     filter = settings.Code(default=None).as_callable(lambda form, block: None)
 
@@ -61,9 +62,12 @@ class ChannelSettings(settings.Form):
 
     @sources.field.parse
     def sources(self, value):
+        section = type(self).sources.field._parse(value)
+        if section in settings.IGNORE:
+            return section
         try:
             with self.ctx.reset():
-                return value, self.ctx.config.source_settings(value)
+                return value, self.ctx.config.source_settings(section)
         except settings.Error, ex:
             self.ctx.errors.append(ex)
             return settings.ERROR
@@ -92,9 +96,12 @@ class ChannelSettings(settings.Form):
 
     @sink.parse
     def sink(self, value):
+        section = type(self).sources.field._parse(value)
+        if section in settings.IGNORE:
+            return section
         with self.ctx.reset():
             try:
-                return self.ctx.config.sink(value)
+                return self.ctx.config.sink(section)
             except Exception, ex:
                 self.ctx.errors.invalid(str(ex))
                 return settings.ERROR
@@ -442,8 +449,8 @@ class ChannelSource(Source):
                         self.channel.name, self.name, offset, errors[0]
                     )
                     continue
-            if self.filter and not not self.filter(form, offset):
-                logger.warning(
+            if self.channel.filter and not self.channel.filter(form, offset):
+                logger.debug(
                     '%s:%s @ %s filtered', self.channel.name, self.name, offset
                 )
                 continue

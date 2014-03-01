@@ -88,19 +88,6 @@ class SourceSettings(settings.Form):
     #: Note that regex strings are treated as verbose (http://docs.python.org/2/library/re.html#re.X).
     pattern = settings.Pattern(flags=re.VERBOSE)
 
-    @pattern.parse
-    def pattern(self, value):
-        match = settings.Code.match(value)
-        if match:
-            try:
-                value = settings.Code.load(*match)
-            except Exception, ex:
-                self.ctx.errors.invalid(str(ex))
-                return settings.ERROR
-            if not isinstance(value, basestring):
-                return value
-        return self.ctx.field._parse(value)
-
     #: A module:attribute string that resolve to a callable with this signature:
     #:
     #: ..code::
