@@ -29,7 +29,7 @@ Error = pilo.FieldError
 ctx = pilo.ctx
 
 
-class Form(pilo.Form):
+class Settings(pilo.Form):
 
     @classmethod
     def from_file(cls, path, section):
@@ -38,6 +38,7 @@ class Form(pilo.Form):
             config.readfp(fo)
         src = Source(config, section, path)
         return cls(src)
+
 
 Field = pilo.Field
 
@@ -128,6 +129,10 @@ class Code(String):
         return match.group('module'), match.group('attr')
 
     @classmethod
+    def inline_match(cls, value):
+        return value.count('\n') > 0
+
+    @classmethod
     def load(cls, name, attr):
         # module
         if name is None:
@@ -135,7 +140,7 @@ class Code(String):
         elif name in ctx.config.exts:
             module = ctx.config.exts[name]
             if module is None:
-                raise RuntimeError('Could not load extension {0}'.format(name))
+                raise ValueError('Could not load extension {0}'.format(name))
         else:
             module = __import__(name)
 
@@ -156,7 +161,9 @@ class Code(String):
         code_globals['slurp'] = slurp
         exec code in code_globals
         if name not in code_globals:
-            raise RuntimeError('Code does not define "{0}"'.format(name))
+            raise TypeError('Code does not define a "{0}" attribute'.format(
+                name
+            ))
         return code_globals[name]
 
     def _parse(self, value):
@@ -168,8 +175,8 @@ class Code(String):
         if value in IGNORE:
             return value
 
-        # compile
-        if value.count('\n') > 0:
+        # in-line
+        if self.inline_match(value):
             try:
                 return self.compile(self.name, value)
             except Exception, ex:
@@ -186,7 +193,7 @@ class Code(String):
                 self.ctx.errors.invalid(str(ex))
                 return pilo.ERROR
 
-        self.ctx.errors.invalid('"{0}" does not match pattern {1}'.format(
+        self.ctx.errors.invalid('"{0}" does not match pattern "{1}" and it not a code block'.format(
             value, self.pattern.pattern
         ))
         return pilo.ERROR

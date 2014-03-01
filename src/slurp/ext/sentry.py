@@ -2,10 +2,10 @@
 """
 import raven
 
-from .. import settings, Sink
+from .. import settings, Settings, Sink
 
 
-class SentrySettings(settings.Form):
+class SentrySettings(Settings):
 
     dsns = settings.Dict(settings.String(), settings.String(), 'dsn')
 

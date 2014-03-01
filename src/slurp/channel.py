@@ -18,13 +18,13 @@ try:
 except ImportError:
     pass
 
-from . import settings, Source, form
+from . import settings, Settings, Source, form, Form
 
 
 logger = logging.getLogger(__name__)
 
 
-class ChannelSettings(settings.Form):
+class ChannelSettings(Settings):
 
     #: Flag indicating whether channel processing errors should be ignored or
     #: blocking.
@@ -33,20 +33,20 @@ class ChannelSettings(settings.Form):
     #: Number of allowable consecutive errors before entering strict mode.
     strict_slack = settings.Integer(default=0).min(0)
 
-    #: A module:attribute string that resolve to a callable with this
-    #: signature:
+    #: A module:attribute string of a in-line code block that resolves to a
+    #: callable with this  signature:
     #:
     #: ..code::
     #:
     #:      def filter(form, block):
     #:          return True
     #:
-    #: If the call-able returns True block is processed otherwise it is
+    #: If the callable returns True the block is processed otherwise it is
     #: discarded.
     filter = settings.Code(default=None).as_callable(lambda form, block: None)
 
-    #: A module:attribute string that resolves to a :class:`Form`. This is used
-    #: to map forms returned by a source.
+    #: A module:attribute string or in-line code that resolves to a
+    #: :class:`Form`. This is used to map forms returned by a source.
     form = settings.Code(default=None)
 
     #: Flag indicating whether source progress information (i.e. offsets)
@@ -56,6 +56,14 @@ class ChannelSettings(settings.Form):
     #: Flag indicating whether newly tracked source files should be processed
     #: from the beginning of end upon detection.
     backfill = settings.Boolean(default=False)
+
+    @backfill.validate
+    def backfill(self, value):
+        if value is not None:
+            if value and not self.track:
+                self.ctx.errors.invalid('Cannot backfill if "track" is false')
+                return False
+        return True
 
     #: List of `Source` names.
     sources = settings.List(settings.String(), default=[])
@@ -219,7 +227,7 @@ class Channel(object):
         return ChannelWorker(self, **kwargs)
 
 
-class EditForm(form.Form):
+class EditForm(Form):
 
     tracker = form.Dict(form.String(), form.Integer(), default=dict)
 
@@ -411,7 +419,13 @@ class ChannelSource(Source):
         return offset
 
     def reset(self, path, offset=0):
-        self.seek(path, offset)
+        if not self.match(path):
+            raise ValueError('"{}" does not match pattern "{}"'.format(
+                path, self.glob.pattern
+            ))
+        if path in self.channel.tracker:
+            del self.channel.tracker[path]
+            logger.debug('%s:%s "%s" offset reset', self.channel.name, self.name, path)
 
     def tell(self, path):
         with self.open(path) as fo:
@@ -467,6 +481,7 @@ class ChannelSource(Source):
         st = time.time()
         with self.channel.stats_sample(), self.channel.sink:
             while True:
+                block = None
                 try:
                     for form, block in self.forms(fo):
                         pending = self.channel.sink(form, block)
@@ -488,15 +503,19 @@ class ChannelSource(Source):
                         raise
                     logger.exception(ex)
                     errors += 1
+                    if block:
+                        self.channel.tracker[path] = block.end
+                        fo.seek(block.end)
                     continue
                 break
         et = time.time()
+        delta = et - st
         offset = self.channel.tracker.get(path, None)
         logger.info(
             '%s:%s consumed %s (%s bytes) from "%s" @ %s in %0.4f sec(s)',
-            self.channel.name, self.name, count, bytes, path, offset or '-', et - st
+            self.channel.name, self.name, count, bytes, path, offset or '-', delta
         )
-        return count, offset
+        return count, bytes, errors, delta
 
 
 class ChannelWorker(threading.Thread):

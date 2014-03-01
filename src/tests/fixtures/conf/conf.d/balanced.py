@@ -1,7 +1,7 @@
 import slurp
 
 
-class AccessPayload(slurp.form.Form):
+class AccessPayload(slurp.Form):
 
     ip = slurp.form.String()
 
@@ -38,7 +38,7 @@ class AccessPayload(slurp.form.Form):
         ))
 
 
-class Access(slurp.form.Form):
+class Access(slurp.Form):
 
     src_file = slurp.form.String('block.path').from_context()
 
@@ -51,7 +51,7 @@ class Access(slurp.form.Form):
     payload = slurp.form.SubForm(AccessPayload, None)
 
 
-class AccessSearch(slurp.form.Form):
+class AccessSearch(slurp.Form):
 
     index = slurp.form.String().format(
         'logs_{year:02}{month:02}{day:02}',

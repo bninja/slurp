@@ -2,10 +2,10 @@
 """
 import pyes
 
-from .. import settings, Sink
+from .. import settings, Settings, Sink
 
 
-class ElasticSearchSettings(settings.Form):
+class ElasticSearchSettings(Settings):
 
     connections = settings.List(settings.String())
 

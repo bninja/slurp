@@ -69,13 +69,13 @@ import fnmatch
 import logging
 import re
 
-from . import settings, form, Blocks
+from . import settings, Settings, form, Form, Blocks
 
 
 logger = logging.getLogger(__name__)
 
 
-class SourceSettings(settings.Form):
+class SourceSettings(Settings):
 
     #: Glob patterns used to determine whether a path is associated with
     #: (i.e. matches) this source.
@@ -88,17 +88,21 @@ class SourceSettings(settings.Form):
     #: Note that regex strings are treated as verbose (http://docs.python.org/2/library/re.html#re.X).
     pattern = settings.Pattern(flags=re.VERBOSE)
 
-    #: A module:attribute string that resolve to a callable with this signature:
+    #: A module:attribute string or in-line code block that resolve to a
+    #: call-able with this signature:
     #:
     #: ..code::
     #:
     #:      def filter(form, block):
     #:          return True
     #:
+    #: If the call-able returns True the block is processed otherwise it is
+    #: discarded.
     filter = settings.Code(default=None).as_callable(lambda form, block: None)
 
-    #: A module:attribute string that resolves to a :class:`Form`.
-    form = settings.Code(default=None).as_class(form.Form)
+    #: A module:attribute string or in-line code that resolves to a
+    #: :class:`Form`. This is used to map blocks.
+    form = settings.Code(default=None).as_class(Form)
 
     #: A regex string that determines the start of a :class:`Block`. This is
     #: only needed if blocks cannot be unambiguously delimited by a terminal.

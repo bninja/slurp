@@ -53,6 +53,7 @@ import re
 
 from . import (
     settings,
+    Settings,
     SourceSettings, Source,
     SinkSettings,
     ChannelSettings, Channel,
@@ -62,7 +63,7 @@ from . import (
 logger = logging.getLogger(__name__)
 
 
-class GlobalSettings(settings.Form):
+class GlobalSettings(Settings):
 
     #: Where to store slurp state (e.g. channel tracking files, etc).
     state_dir = settings.String(default=None).translate({'-': None})

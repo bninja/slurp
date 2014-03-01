@@ -1,6 +1,6 @@
 from pprint import pprint
 
-from . import settings
+from . import settings, Settings
 
 
 class Sink(object):
@@ -17,7 +17,7 @@ class Sink(object):
         pass
 
 
-class SinkSettings(settings.Form):
+class SinkSettings(Settings):
 
     type = settings.Code().as_class(Sink)
 

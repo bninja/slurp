@@ -7,11 +7,11 @@ try:
 except ImportError:
     pyinotify = None
 
-from . import settings
-from . import form
+from . import settings, form
 from .block import Block, Blocks
+from .settings import Settings
 from .form import Form
-from .sink import Sink, SinkSettings, Echo
+from .sink import Sink, SinkSettings, Echo, Drop
 from .source import Source, SourceSettings
 from .channel import Channel, ChannelSource, ChannelSettings, ChannelEvent
 from .config import Config
@@ -20,6 +20,7 @@ __version__ = '0.9'
 
 __all__ = [
     'settings',
+    'Settings',
     'form',
     'Form',
     'Block',
@@ -27,6 +28,7 @@ __all__ = [
     'Sink',
     'SinkSettings',
     'Echo',
+    'Drop',
     'Source',
     'SourceSettings',
     'Channel',
@@ -78,19 +80,20 @@ def reset(file_paths, channels):
             if not source:
                 continue
             source.reset(path)
-            print channel.name, source.name, path, 0
+            print channel.name, source.name, path
 
 
 def consume(file_paths, channels):
     """
-    Consumes blocks in files. A file path can be:
+    Consumes blocks from files. A file path can be:
 
-    -  a path to a file on disk
-    - a (source-name, file-like object) tuple
+    - a path to a file on disk
+    - a (source name, file-like object) tuple
     - a file-like object
 
     If you specify a file-like object without a source (the third option) then
-    there can be only one source associated with channels.
+    there can be only one source associated with channels as otherwise the
+    source is ambiguous.
     """
     for path in file_paths:
         matches = 0
@@ -120,7 +123,9 @@ def consume(file_paths, channels):
                 matches += 1
 
             # eat it
-            source.consume(path)
+            count, bytes, errors, delta = source.consume(path)
+            path_name = path if isinstance(path, basestring) else getattr(path, 'name', '<memory>')
+            print channel.name, source.name, path_name, count, bytes, errors
 
         logger.debug('"%s" matched %s channel(s)', path, matches)
 
@@ -192,8 +197,8 @@ if pyinotify:
 
 def watch(paths, channels, recursive=True, auto_add=True):
     """
-    Monitors paths (files or directories) for changes and consumes blocks from
-    them when changes are detected.
+    Monitors paths (files or directories) for changes to files and consumes
+    blocks from them when changes are detected.
     """
     if not pyinotify:
         raise RuntimeError('Cannot import pyinotify, pip install pyinotify!')

@@ -24,6 +24,7 @@ class TestConfig(TestCase):
         self.assertItemsEqual([
             'balanced-search',
             'nginx-search',
+            'nginx-email',
             'balanced-sentry',
             ], config.sink_names)
         map(config.sink_settings, config.sink_names)
