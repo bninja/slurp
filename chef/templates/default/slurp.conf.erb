@@ -6,7 +6,7 @@ strict = <%= node['slurp']['strict'] ? "true" : "false" %>
 strict_slack = <%= node['slurp']['strict_slack'] %>
 read_size = <%= node['slurp']['read_size'] %>
 buffer_size = <%= node['slurp']['buffer_size'] %>
-batch_count = <%= node['slurp']['batch_count'] %>
+batch_size = <%= node['slurp']['batch_size'] %>
 includes = <%= node['slurp']['includes_dir'] %>/*
 <% if node['slurp']['newrelic_file'] -%>
 newrelic_file = <%= node['slurp']['newrelic_file'] %> 
