@@ -14,7 +14,7 @@ case "$1" in
     
         # ensure directory ownership
         chown slurp:slurp /var/lib/slurp
-        chown slurp:slurp /etc/slurp
+        chown slurp:slurp -R /etc/slurp
     ;;
 
     *)

@@ -88,11 +88,17 @@ class GlobalSettings(Settings):
     #: Default strict flag.
     strict = settings.Boolean(default=False)
 
+    #: Default strict slack count.
+    strict_slack = settings.Integer(default=0).min(0)
+
     #: Default source read size in bytes.
-    read_size = settings.Integer(default=4096).min(0)
+    read_size = settings.Integer(default=4096).min(1024)
 
     #: Default source read buffer size in bytes.
-    buffer_size = settings.Integer(default=1048576).min(0)
+    buffer_size = settings.Integer(default=1048576).min(1024)
+
+    #: Default batch count.
+    batch_count = settings.Integer(default=100).min(1)
 
     @buffer_size.validate
     def buffer_size(self, value):
@@ -138,8 +144,10 @@ class Config(object):
             newrelic_env=GlobalSettings.newrelic_env.default,
             backfill=GlobalSettings.backfill.default,
             strict=GlobalSettings.strict.default,
+            strict_slack=GlobalSettings.strict_slack.default,
             read_size=GlobalSettings.read_size.default,
             buffer_size=GlobalSettings.buffer_size.default,
+            batch_count=GlobalSettings.batch_count.default,
         ):
         # globals
         self.state_dir = state_dir

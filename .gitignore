@@ -31,3 +31,6 @@ docs/_build
 # pydev
 .pydevproject
 .project
+
+# md preview
+.*.md.html
