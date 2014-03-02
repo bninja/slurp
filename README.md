@@ -1,4 +1,4 @@
-[status](https://secure.travis-ci.org/bninja/slurp.png?branch=dev)
+[![Build Status](https://travis-ci.org/bninja/slurp.png?branch=dev)](https://travis-ci.org/bninja/slurp)
 
 Installing
 ==========
