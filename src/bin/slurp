@@ -52,7 +52,7 @@ Use --help on sub-commands to see usage details.
 """
 import argparse
 import fnmatch
-import logging
+import logging.config
 import os
 from pprint import pprint
 import re
@@ -188,7 +188,7 @@ def consume_all(args):
         filter(ChannelFilter(args.includes, args.excludes), args.config.channel_names)
     )
     slurp.consume(args.files, channels)
-    
+
 
 def watch_all_parser(cmds, parents):
     cmd = cmds.add_parser(
@@ -278,7 +278,7 @@ def source_show_parser(cmds, parents):
 
 def source_show(args):
     pprint(args.config.source_settings(args.source[0]))
-    
+
 
 def source_consume_parser(cmds, parents):
     cmd = cmds.add_parser(
@@ -452,8 +452,8 @@ def channel_edit_parser(cmds, parents):
         description='Edits CHANNEL state (e.g. offset information, etc).',
     )
     cmd.set_defaults(cmd=channel_edit)
-    
-    
+
+
 def channel_edit(args):
     channel = args.config.channel(args.channel[0])
     channel.edit()
@@ -543,6 +543,79 @@ def channel_watch(args):
     slurp.watch(args.paths, channels)
 
 
+# shell command
+
+def shell_parser(cmds, parents):
+    cmd = cmds.add_parser(
+        'shell',
+        parents=parents,
+        description='interactive shell',
+    )
+    cmd.add_argument(
+        'type',
+        nargs='?',
+        default='auto',
+        choices=['auto', 'native', 'ipython'],
+        metavar='TYPE',
+        help='TYPE of shell',
+    )
+    cmd.set_defaults(cmd=shell)
+    return cmd
+
+
+def shell(args):
+    namespace = {
+        'config': args.config,
+    }
+    namespace.update(dict(
+        (attr, getattr(slurp, attr)) for attr in slurp.__all__
+    ))
+    if args.type == 'native':
+        return shell_native(namespace)
+    elif args.type == 'ipython':
+        return shell_ipython(namespace)
+    elif args.type == 'auto':
+        try:
+            return shell_ipython(namespace)
+        except ImportError:
+            return shell_native(namespace)
+
+
+def shell_native(namespace):
+    # http://stackoverflow.com/a/5597918
+    try:
+        import readline
+    except ImportError:
+        pass
+    import code
+    shell = code.InteractiveConsole(namespace)
+    return shell.interact()
+
+
+def shell_ipython(namespace):
+    def embed_13():
+        from IPython import embed
+        return embed(user_ns=namespace)
+
+    def embed_11():
+        from IPython.terminal.embed import InteractiveShellEmbed
+        return InteractiveShellEmbed(user_ns=namespace)()
+
+    def embed_0():
+        from IPython.Shell import IPShellEmbed
+        return IPShellEmbed(user_ns=namespace)()
+
+    embeds = [embed_13, embed_11, embed_0]
+    while True:
+        embed = embeds.pop()
+        try:
+            return embed()
+        except Exception:
+            if  embeds:
+                continue
+            raise
+
+
 # helpers
 
 dry_overrides = {
@@ -600,7 +673,7 @@ class ChannelFilter(object):
 
 
 class FileAction(argparse.Action):
-    
+
     pattern = re.compile(r'(?P<source>.+?)://(?P<path>.+)')
 
     def __call__(self, parser, namespace, values, option_string=None):
@@ -696,7 +769,7 @@ conf FILE, defaults to $SLURP_CONF or /etc/slurp/slurp.conf
 """,
     )
     parents = [cmn]
-    
+
     parser = argparse.ArgumentParser(
         version=slurp.__version__,
         parents=parents,
@@ -729,14 +802,17 @@ way. See https://github.com/bninja/slurp.
             metavar='CHANNEL',
             help='name or glob patttern of CHANNEL(s) to exclude',
         )
-    
+
     # source
     source_list_parser(cmds, parents)
     source_parser(cmds, parents)
-    
+
     # channel
     channel_list_parser(cmds, parents)
     channel_parser(cmds, parents)
+
+    # shell
+    shell_parser(cmds, parents)
 
     return parser
 

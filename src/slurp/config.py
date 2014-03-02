@@ -82,6 +82,9 @@ class GlobalSettings(Settings):
     #: Newrelic environment.
     newrelic_env = settings.String(default=None)
 
+    #: Default track flag.
+    track = settings.Boolean(default=False)
+
     #: Default backfill flag.
     backfill = settings.Boolean(default=False)
 
@@ -92,13 +95,10 @@ class GlobalSettings(Settings):
     strict_slack = settings.Integer(default=0).min(0)
 
     #: Default source read size in bytes.
-    read_size = settings.Integer(default=4096).min(1024)
+    read_size = settings.Integer(default=1024 * 4).min(1024)
 
     #: Default source read buffer size in bytes.
-    buffer_size = settings.Integer(default=1048576).min(1024)
-
-    #: Default batch count.
-    batch_count = settings.Integer(default=100).min(1)
+    buffer_size = settings.Integer(default=1024 * 1024).min(1024)
 
     @buffer_size.validate
     def buffer_size(self, value):
@@ -108,6 +108,9 @@ class GlobalSettings(Settings):
             )
             return False
         return True
+
+    #: Default batch count.
+    batch_size = settings.Integer(default=100).min(1)
 
     #: File globs for other configurations (i.e. *.conf) or extensions
     #: (i.e. *.py) to load.
@@ -142,12 +145,13 @@ class Config(object):
             state_dir=GlobalSettings.state_dir.default,
             newrelic_file=GlobalSettings.newrelic_file.default,
             newrelic_env=GlobalSettings.newrelic_env.default,
+            track=GlobalSettings.track.default,
             backfill=GlobalSettings.backfill.default,
             strict=GlobalSettings.strict.default,
             strict_slack=GlobalSettings.strict_slack.default,
             read_size=GlobalSettings.read_size.default,
             buffer_size=GlobalSettings.buffer_size.default,
-            batch_count=GlobalSettings.batch_count.default,
+            batch_size=GlobalSettings.batch_size.default,
         ):
         # globals
         self.state_dir = state_dir
@@ -169,6 +173,20 @@ class Config(object):
         self.sinks = {}
         self.channels = {}
 
+        # defaults
+        self.sources_defaults = {
+            'strict': strict,
+            'read_size': read_size,
+            'buffer_size': buffer_size,
+        }
+        self.channel_defaults = {
+            'strict': strict,
+            'strict_slack': strict_slack,
+            'track': track,
+            'backfill': backfill,
+            'batch_size': batch_size,
+        }
+
         # scan
         if includes is None:
             includes = []
@@ -188,15 +206,20 @@ class Config(object):
         """
         return self.sources.keys()
 
-    def source_settings(self, name):
+    def source_settings(self, name, **overrides):
         """
         Loads `SourceSettings` instance for a named source.
         """
         path, section = self.sources[name]
         with settings.ctx(config=self):
-            return SourceSettings.from_file(path, section)
+            source_settings = SourceSettings.from_file(path, section)
+        for name, value in self.sources_defaults.iteritems():
+            if name in source_settings and source_settings[name] is None:
+                source_settings[name] = value
+        source_settings.update(**overrides)
+        return source_settings
 
-    def source(self, name):
+    def source(self, name, **overrides):
         """
         Loads `Source` instance for a name source.
         """
@@ -238,11 +261,14 @@ class Config(object):
         """
         path, section = self.channels[name]
         with settings.ctx(config=self):
-            cs = ChannelSettings.from_file(path, section)
-            cs.update(overrides)
-            return cs
+            channel_settings = ChannelSettings.from_file(path, section)
+        for name, value in self.channel_defaults.iteritems():
+            if name in channel_settings and channel_settings[name] is None:
+                channel_settings[name] = value
+        channel_settings.update(overrides)
+        return channel_settings
 
-    def channel(self, name, stats=False, **overrides):
+    def channel(self, name, **overrides):
         """
         Loads `Channel` instance for a named channel.
         """
@@ -251,7 +277,6 @@ class Config(object):
         channel = Channel(
             name=name,
             state_dir=self.state_dir,
-            stats=stats,
             **cs
         )
         for name, source in sources:

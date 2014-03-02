@@ -26,13 +26,6 @@ logger = logging.getLogger(__name__)
 
 class ChannelSettings(Settings):
 
-    #: Flag indicating whether channel processing errors should be ignored or
-    #: blocking.
-    strict = settings.Boolean(default=False)
-
-    #: Number of allowable consecutive errors before entering strict mode.
-    strict_slack = settings.Integer(default=0).min(0)
-
     #: A module:attribute string of a in-line code block that resolves to a
     #: callable with this  signature:
     #:
@@ -45,22 +38,29 @@ class ChannelSettings(Settings):
     #: discarded.
     filter = settings.Code(default=None).as_callable(lambda form, block: None)
 
+    #: Flag indicating whether channel processing errors should be ignored or
+    #: blocking.
+    strict = settings.Boolean(default=False)
+
+    #: Number of allowable consecutive errors before entering strict mode.
+    strict_slack = settings.Integer(default=0).min(0)
+
     #: A module:attribute string or in-line code that resolves to a
     #: :class:`Form`. This is used to map forms returned by a source.
     form = settings.Code(default=None)
 
     #: Flag indicating whether source progress information (i.e. offsets)
     #: should be persisted.
-    track = settings.Boolean(default=False)
+    track = settings.Boolean(default=None)
 
     #: Flag indicating whether newly tracked source files should be processed
     #: from the beginning of end upon detection.
-    backfill = settings.Boolean(default=False)
+    backfill = settings.Boolean(default=None)
 
     @backfill.validate
     def backfill(self, value):
         if value is not None:
-            if value and not self.track:
+            if value and self.track is False:
                 self.ctx.errors.invalid('Cannot backfill if "track" is false')
                 return False
         return True
@@ -80,24 +80,24 @@ class ChannelSettings(Settings):
             self.ctx.errors.append(ex)
             return settings.ERROR
 
-    #:
-    batch_size = settings.Integer(default=64)
+    #: Maximum number of block to process before forcing a sink flush.
+    batch_size = settings.Integer(default=None)
 
     #: Initial number of seconds to throttle the channel on error.
-    throttle_duration = settings.Integer(default=30)
+    throttle_duration = settings.Integer(default=None)
 
     #: Back-off factor to apply to duration on a repeated error.
-    throttle_backoff = settings.Integer(default=2)
+    throttle_backoff = settings.Integer(default=None)
 
     #: Maximum throttle duration.
-    throttle_cap = settings.Integer(default=1000)
+    throttle_cap = settings.Integer(default=None)
 
     #: Maximum number of events in channel processing queues. 0 means
     #: unbounded.
-    queue_size = settings.Integer(default=1024).min(0)
+    queue_size = settings.Integer(default=None).min(0)
 
     #: Channel processing queue poll frequency in seconds.
-    queue_poll = settings.Float(default=10.0).min(1.0)
+    queue_poll = settings.Float(default=None).min(1.0)
 
     #: `Sink` name.
     sink = settings.String()
@@ -110,6 +110,8 @@ class ChannelSettings(Settings):
         with self.ctx.reset():
             try:
                 return self.ctx.config.sink(section)
+            except KeyboardInterrupt:
+                raise
             except Exception, ex:
                 self.ctx.errors.invalid(str(ex))
                 return settings.ERROR
@@ -125,16 +127,16 @@ class Channel(object):
             filter=None,
             form=None,
             state_dir=None,
-            strict=ChannelSettings.strict.default,
-            strict_slack=ChannelSettings.strict_slack.default,
-            batch_size=ChannelSettings.batch_size.default,
-            track=ChannelSettings.track.default,
-            backfill=ChannelSettings.backfill.default,
-            throttle_duration=ChannelSettings.throttle_duration.default,
-            throttle_backoff=ChannelSettings.throttle_backoff.default,
-            throttle_cap=ChannelSettings.throttle_cap.default,
-            queue_size=ChannelSettings.queue_size.default,
-            queue_poll=ChannelSettings.queue_poll.default,
+            strict=False,
+            strict_slack=0,
+            batch_size=100,
+            track=False,
+            backfill=False,
+            throttle_duration=30,
+            throttle_backoff=2,
+            throttle_cap=1000,
+            queue_size=1000,
+            queue_poll=10.0,
             stats=False,
         ):
         self.name = name
@@ -189,20 +191,22 @@ class Channel(object):
         raw = json.dumps(state, indent=4)
 
         raw_fd, raw_path = tempfile.mkstemp(prefix='slurp-')
+        logger.debug('writing state to "%s"', raw_path)
         ctime = os.stat(raw_path).st_mtime
         with os.fdopen(raw_fd, 'w') as raw_fo:
             raw_fo.write(raw)
 
         cmd = [self.editor, raw_path]
-        logger.debug('editing state file "%s"', ' '.join(cmd))
+        logger.debug('editing state - %s', ' '.join(cmd))
         subprocess.check_call(cmd)
         if os.stat(raw_path).st_mtime == ctime:
+            logger.debug('no state changes detected')
             os.remove(raw_path)
             return False
 
         with open(raw_path, 'r') as fo:
             form = EditForm(json.load(fo))
-        logger.debug('applying state changes from "%s"', raw_path)
+        logger.info('applying state changes from "%s"', raw_path)
         for path, offset in form.tracker.iteritems():
             self.tracker[path] = offset
         for path in self.tracker.iterkeys():
@@ -472,42 +476,59 @@ class ChannelSource(Source):
 
     def consume(self, fo):
         if isinstance(fo, basestring):
-            with self.open(fo) as fo:
+            path = fo
+            with self.open(path) as fo:
+                if path not in self.channel.tracker:
+                    self.channel.tracker[path] = fo.tell()
                 return self.consume(fo)
         path = getattr(fo, 'name', '<memory>')
         count = 0
         bytes = 0
+        pending = 0
         errors = 0
+        reset_slack = self.channel.strict_slack
+        slack = reset_slack
         st = time.time()
         with self.channel.stats_sample(), self.channel.sink:
             while True:
                 block = None
                 try:
                     for form, block in self.forms(fo):
-                        pending = self.channel.sink(form, block)
-                        if not pending:
-                            errors = 0
-                        count += 1
+                        if self.channel.sink(form, block):
+                            # pending
+                            if (self.channel.batch_size and
+                                pending >= self.channel.batch_size):
+                                # flush
+                                self.channel.sink.flush()
+
+                                # emitted
+                                count += pending + 1
+                                slack = reset_slack
+                                pending = 0
+                            else:
+                                pending += 1
+                        else:
+                            # emitted
+                            count += pending + 1
+                            slack = reset_slack
+                            pending = 0
                         bytes += block.end - block.begin
                 except KeyboardInterrupt:
                     raise
                 except Exception, ex:
-                    if self.channel.strict:
-                        raise
-                    if (self.channel.strict_slack and
-                        errors > self.channel.strict_slack):
-                        logger.info(
-                            '%s:%s consume consecutive errors %s > %s',
-                            errors, self.channel.strict_slack,
-                        )
+                    if self.channel.strict and slack <= 0:
                         raise
                     logger.exception(ex)
-                    errors += 1
+                    slack -= 1
+                    errors += pending + 1
+                    pending = 0
                     if block:
                         self.channel.tracker[path] = block.end
                         fo.seek(block.end)
                     continue
                 break
+        count += pending
+        pending = 0
         et = time.time()
         delta = et - st
         offset = self.channel.tracker.get(path, None)

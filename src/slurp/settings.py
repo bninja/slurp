@@ -37,7 +37,8 @@ class Settings(pilo.Form):
         with open(path, 'r') as fo:
             config.readfp(fo)
         src = Source(config, section, path)
-        return cls(src)
+        with ctx(section=section):
+            return cls(src)
 
 
 Field = pilo.Field
@@ -158,7 +159,14 @@ class Code(String):
     def compile(cls, name, code, **code_globals):
         import slurp
 
-        code_globals['slurp'] = slurp
+        code_globals.update({
+            'slurp': slurp,
+            'logger': logger,
+        })
+        if hasattr(ctx, 'section'):
+            code_globals['logger'] = logging.getLogger(
+                'slurp.settings[{0}]'.format(ctx.section)
+            )
         exec code in code_globals
         if name not in code_globals:
             raise TypeError('Code does not define a "{0}" attribute'.format(

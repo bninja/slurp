@@ -26,10 +26,10 @@ class Echo(Sink):
 
     def __call__(self, form, block):
         pprint(form)
-        return block
 
 
 class Drop(Sink):
 
     def __call__(self, form, block):
-        return block
+        # NOTE: True means pending
+        return True

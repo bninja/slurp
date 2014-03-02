@@ -23,10 +23,10 @@ class Sentry(Sink):
         ])
         self.ignore_unknown = ignore_unknown
 
-    def __call__(self, form, offset):
+    def __call__(self, form, block):
         if form['project'] not in self.clis:
             if self.ignore_unknown:
-                return offset
+                return
             raise ValueError(
                 'Unknown project {0}, expected one of {1}'.format(form['project'], self.clis.keys())
             )

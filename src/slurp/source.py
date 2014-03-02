@@ -113,13 +113,13 @@ class SourceSettings(Settings):
 
     #: Flag indicating whether source block parsing must succeeded. If False
     #: block parse error a logged and the block skipped.
-    strict = settings.Boolean(default=False)
+    strict = settings.Boolean(default=None)
 
     #: Size of block reads in bytes.
-    read_size = settings.Integer(default=4096)
+    read_size = settings.Integer(default=None)
 
     #: Size of unparsed block buffer in bytes.
-    buffer_size = settings.Integer(default=1048576)
+    buffer_size = settings.Integer(default=None)
 
     @buffer_size.validate
     def buffer_size(self, value):
@@ -144,11 +144,11 @@ class Source(object):
             pattern,
             form=None,
             filter=None,
-            terminal=SourceSettings.terminal.default,
-            prefix=SourceSettings.prefix.default,
-            strict=SourceSettings.strict.default,
-            read_size=SourceSettings.read_size.default,
-            buffer_size=SourceSettings.buffer_size.default,
+            terminal='\n',
+            prefix=None,
+            strict=False,
+            read_size=1024,
+            buffer_size=1048576,
         ):
         self.name = name
         self.globs = []
