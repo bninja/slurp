@@ -7,7 +7,11 @@ from .. import settings, Settings, Sink
 
 class ElasticSearchSettings(Settings):
 
+    # List of elasticsearch servers (e.g. https://es.exampl.org:9200).
     connections = settings.List(settings.String())
+
+    #: A (username, password) tuple for authenticating with elasticsearch servers.
+    creds = settings.Tuple((settings.String(), settings.String()), default=None)
 
     timeout = settings.Integer(default=10).min(0)
 
@@ -20,10 +24,11 @@ class ElasticSearch(Sink):
 
     settings = ElasticSearchSettings
 
-    def __init__(self, name, connections, timeout, bulk, bulk_size):
+    def __init__(self, name, connections, creds, timeout, bulk, bulk_size):
         super(ElasticSearch, self).__init__(name)
         self._es = None
         self.connections = connections
+        self.creds = creds
         self.timeout = timeout
         self.bulk = bulk
         self.bulk_size = bulk_size
@@ -32,10 +37,14 @@ class ElasticSearch(Sink):
     @property
     def es(self):
         if self._es is None:
+            basic_auth = None
+            if self.creds:
+                basic_auth = dict(zip(['username', 'password'], self.creds))
             self._es = pyes.ES(
                 self.connections,
                 timeout=self.timeout,
                 bulk_size=self.bulk_size,
+                basic_auth=basic_auth,
             )
         return self._es
 
