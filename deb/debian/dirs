@@ -1,3 +1,2 @@
-etc/slurp/routers.d
+etc/slurp
 var/lib/slurp
-var/log/slurp

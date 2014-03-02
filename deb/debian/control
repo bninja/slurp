@@ -2,7 +2,7 @@ Source: slurp
 Maintainer: me <me@aitmp.com>
 Section: misc
 Priority: optional
-Standards-Version: 3.7.2.0
+Standards-Version: 3.9.3
 Build-Depends: debhelper (>= 9), python-dev (>= 2.7)
 
 Package: slurp

@@ -5,8 +5,8 @@ set -e
 case "$1" in
     purge)
         # remove directories
-        rm -rf /var/log/slurp
         rm -rf /var/lib/slurp
+        rm -rf /etc/slurp
 
         # remove user
         if ! getent passwd slurp > /dev/null; then
