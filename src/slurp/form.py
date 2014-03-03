@@ -16,6 +16,10 @@ __all__ = [
 
 NONE = pilo.NONE
 
+ERROR = pilo.ERROR
+
+IGNORE = pilo.IGNORE
+
 ctx = pilo.ctx
 
 Form = pilo.Form

@@ -75,7 +75,7 @@ class ChannelSettings(Settings):
             return section
         try:
             with self.ctx.reset():
-                return value, self.ctx.config.source_settings(section)
+                return section, self.ctx.config.source_settings(section)
         except settings.Error, ex:
             self.ctx.errors.append(ex)
             return settings.ERROR
@@ -499,6 +499,10 @@ class ChannelSource(Source):
                             if (self.channel.batch_size and
                                 pending >= self.channel.batch_size):
                                 # flush
+                                logger.debug(
+                                    '%s:%s reached max batch size %s, flushing ...',
+                                    self.channel.name, self.name, self.channel.batch_size
+                                )
                                 self.channel.sink.flush()
 
                                 # emitted

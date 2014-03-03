@@ -319,7 +319,7 @@ def source_consume_parser(cmds, parents):
 
 
 def source_consume(args):
-    source = args.config.source(args.source[0])
+    source = args.config.source(args.source[0], strict=True)
     if args.file[0] == '-':
         fo = sys.stdin
     else:

@@ -223,7 +223,7 @@ class Config(object):
         """
         Loads `Source` instance for a name source.
         """
-        return Source(name=name, **self.source_settings(name))
+        return Source(name=name, **self.source_settings(name, **overrides))
 
     @property
     def sink_names(self):

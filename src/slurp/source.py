@@ -81,12 +81,24 @@ class SourceSettings(Settings):
     #: (i.e. matches) this source.
     globs = settings.List(settings.Glob())
 
-    #: Either a :
-    #:     - regex string
-    #:     - module:attribute string that resolves to a regex string or a
-    #:       compiled regex
-    #: Note that regex strings are treated as verbose (http://docs.python.org/2/library/re.html#re.X).
-    pattern = settings.Pattern(flags=re.VERBOSE)
+    #: Regex string. Note that regex strings are treated as verbose
+    #: (http:/docs.python.org/2/library/re.html#re.X) and prefixed blocks will
+    #: match newlines (http://docs.python.org/2/library/re.html#re.DOTALL).
+    pattern = settings.String()
+
+    @pattern.parse
+    def pattern(self, value):
+        parsed = self.ctx.field._parse(value)
+        if parsed in form.IGNORE:
+            return parsed
+        flags = re.VERBOSE
+        if self.prefix:
+            flags |= re.DOTALL
+        try:
+            return re.compile(parsed, flags)
+        except re.error, ex:
+            self.ctx.errors.invalid(str(ex))
+            return form.ERROR
 
     #: A module:attribute string or in-line code block that resolve to a
     #: call-able with this signature:
