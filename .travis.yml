@@ -5,4 +5,4 @@ python:
 script: nosetests 
 install:
   - cd src
-  - python setup.pt test
+  - python setup.py test

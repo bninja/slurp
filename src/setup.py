@@ -1,12 +1,23 @@
 import re
 import setuptools
 
+
+extras_require = {
+    'elasticsearch': ['pyes >=0.90.1,<0.91'],
+    'sentry': ['raven'],
+    'email': ['Mako >=0.9,<1.0'],
+    'stats': ['newrelic >=1.13.1.31'],
+    'watch': ['pyinotify ==0.9.3', 'setproctitle ==1.1.6'],
+}
+
 tests_require = [
     'nose >=1.1.0',
     'mock ==0.8',
     'unittest2 >=0.5.1',
     'coverage',
-]
+] + [v for v in extras_require.itervalues()]
+
+extras_require['test'] = tests_require
 
 setuptools.setup(
     name='slurp',
@@ -24,13 +35,7 @@ setuptools.setup(
         'arrow >=0.4.2,<0.5',
         'pilo ==0.2',
     ],
-    extras_require={
-        'elasticsearch': 'pyes >=0.90.1,<0.91',
-        'sentry': 'raven',
-        'stats': 'newrelic >=1.13.1.31',
-        'watch': ['pyinotify ==0.9.3', 'setproctitle ==1.1.6'],
-        'test': tests_require,
-    },
+    extras_require=extras_require,
     packages=[
         'slurp',
         'slurp.ext',
