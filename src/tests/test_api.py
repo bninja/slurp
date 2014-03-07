@@ -58,17 +58,14 @@ class TestTouch(TestCase):
     def test_file_none(self):
         channel = slurp.Channel('tc', slurp.Drop)
         channel.add_source('ts', ['*/nope'], r'(?P<all>.*)')
-        with self.capture_stdout() as io:
-            slurp.touch(
-                [self.fixture('sources', 'nginx-access.log'),
-                 self.fixture('sources', 'error.log'),
-                 self.fixture('sources', 'nginx-error.log'),
-                 ],
-                [channel],
-            )
-        printed = io.getvalue().splitlines()
-        self.assertItemsEqual([], printed)
-        printed = io.getvalue()
+        results = list(slurp.touch(
+            [self.fixture('sources', 'nginx-access.log'),
+             self.fixture('sources', 'error.log'),
+             self.fixture('sources', 'nginx-error.log'),
+             ],
+            [channel],
+        ))
+        self.assertItemsEqual([], results)
         self.assertDictEqual({}, dict(channel.tracker))
 
 

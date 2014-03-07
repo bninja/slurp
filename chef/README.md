@@ -9,8 +9,7 @@ Requirements
 
 A slurp package.
 
-Platforms
-#########
+### Tested Platforms
 
 - Ubuntu (12.04)
 
@@ -40,4 +39,4 @@ Recipes
 
 ### default.rb
 
-Installs the slurp package and renderins its configuration to `node['slurp']['conf_dir']`/slurp.conf. 
+Installs the slurp package and renders its configuration to `node['slurp']['conf_dir']`/slurp.conf. 
