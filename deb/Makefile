@@ -10,7 +10,7 @@ BASEDIR = $(dir $(LOCDIR))
 all: $(DIST)
 
 $(DIST):
-	python setup.py bdist_venv2 --dist-name $(DISTNAME) --location-dir $(LOCDIR) --extras elasticsearch,sentry,stats,watch
+	python setup.py bdist_venv2 --dist-name $(DISTNAME) --location-dir $(LOCDIR) --extras elasticsearch,sentry,stats,watch,email
 
 clean:
 	rm -rf $(BUILDDIR)
