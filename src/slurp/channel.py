@@ -73,6 +73,9 @@ class ChannelSettings(Settings):
         section = type(self).sources.field._parse(value)
         if section in settings.IGNORE:
             return section
+        if section not in self.ctx.config.source_names:
+            self.ctx.errors.invalid('"{0}" is not a source'.format(section))
+            return settings.ERROR
         try:
             with self.ctx.reset():
                 return section, self.ctx.config.source_settings(section)
@@ -107,11 +110,12 @@ class ChannelSettings(Settings):
         section = type(self).sources.field._parse(value)
         if section in settings.IGNORE:
             return section
+        if section not in self.ctx.config.sink_names:
+            self.ctx.errors.invalid('"{0}" is not a sink'.format(section))
+            return settings.ERROR
         with self.ctx.reset():
             try:
                 return self.ctx.config.sink(section)
-            except KeyboardInterrupt:
-                raise
             except Exception, ex:
                 self.ctx.errors.invalid(str(ex))
                 return settings.ERROR
