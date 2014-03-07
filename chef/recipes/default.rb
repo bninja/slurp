@@ -1,6 +1,6 @@
 include_recipe 'balanced-apt'
 
-apt_package node['slurp']['package']['name'] do
+package node['slurp']['package']['name'] do
   action :upgrade
   version node['slurp']['package']['version']
 end

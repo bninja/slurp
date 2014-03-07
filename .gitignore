@@ -34,3 +34,9 @@ docs/_build
 
 # md preview
 .*.md.html
+
+# chef
+chef/.kitchen/
+chef/Berksfile.lock
+chef/.kitchen/
+chef/Gemfile.lock

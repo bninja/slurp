@@ -11,12 +11,12 @@ from . import settings, form
 from .block import Block, Blocks
 from .settings import Settings
 from .form import Form
-from .sink import Sink, SinkSettings, Echo, Drop
+from .sink import Sink, SinkSettings, Echo, Drop, Tally
 from .source import Source, SourceSettings
 from .channel import Channel, ChannelSource, ChannelSettings, ChannelEvent
 from .config import Config
 
-__version__ = '0.6.0'
+__version__ = '0.6.1'
 
 __all__ = [
     'settings',
@@ -29,6 +29,7 @@ __all__ = [
     'SinkSettings',
     'Echo',
     'Drop',
+    'Tally',
     'Source',
     'SourceSettings',
     'Channel',
@@ -48,31 +49,31 @@ logger = logging.getLogger(__name__)
 
 def touch(file_paths, channels):
     """
-    Updates and prints consume progress information (i.e. offsets) for files.
+    Updates and returns consume progress information (i.e. offsets) for files.
     """
     for path in file_paths:
         for channel in channels:
             source = channel.match(path)
             if not source:
                 continue
-            print channel.name, source.name, path, source.touch(path)
+            yield channel.name, source.name, path, source.touch(path)
 
 
 def tell(file_paths, channels):
     """
-    Prints consume progress information (i.e. offsets) for files.
+    Returns consume progress information (i.e. offsets) for files.
     """
     for path in file_paths:
         for channel in channels:
             source = channel.match(path)
             if not source:
                 continue
-            print channel.name, source.name, path, source.tell(path)
+            yield channel.name, source.name, path, source.tell(path)
 
 
 def reset(file_paths, channels):
     """
-    Resets and prints consume progress information (i.e. offsets) for files.
+    Resets and returns consume progress information (i.e. offsets) for files.
     """
     for path in file_paths:
         for channel in channels:
@@ -80,20 +81,32 @@ def reset(file_paths, channels):
             if not source:
                 continue
             source.reset(path)
-            print channel.name, source.name, path
+            yield channel.name, source.name, path
 
 
-def consume(file_paths, channels):
+def consume(file_paths, channels, reset=False):
     """
-    Consumes blocks from files. A file path can be:
+    Consumes blocks from files.
 
-    - a path to a file on disk
-    - a (source name, file-like object) tuple
-    - a file-like object
+    :param file_paths:
 
-    If you specify a file-like object without a source (the third option) then
-    there can be only one source associated with channels as otherwise the
-    source is ambiguous.
+        Sequence of file paths. A file path can be:
+
+        - a path to a file on disk
+        - a (source name, file-like object) tuple
+        - a file-like object
+
+        If you specify a file-like object without a source (the third option) then
+        there can be only one source associated with channels as otherwise the
+        source is ambiguous.
+
+    :param channels:
+        List of `Channels` to match against. If a file path does **not** match
+        a `Channel` blocks from that file will not be sent to it.
+
+    :param reset:
+        Flag indicating whether existing offset information should be reset
+        when consuming blocks.
     """
     for path in file_paths:
         matches = 0
@@ -122,10 +135,14 @@ def consume(file_paths, channels):
                 source = channel.sources[0]
                 matches += 1
 
+            # reset it
+            if reset:
+                source.reset(path)
+
             # eat it
             count, bytes, errors, delta = source.consume(path)
             path_name = path if isinstance(path, basestring) else getattr(path, 'name', '<memory>')
-            print channel.name, source.name, path_name, count, bytes, errors
+            yield channel.name, source.name, path_name, count, bytes, errors
 
         logger.debug('"%s" matched %s channel(s)', path, matches)
 

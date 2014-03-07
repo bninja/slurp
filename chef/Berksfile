@@ -1,0 +1,10 @@
+# -*- mode: ruby -*-
+
+source 'https://berks.vandelay.io/'
+
+metadata
+
+group :test do
+    cookbook 'balanced-apt'
+    cookbook 'slurp_test', path: './test/cookbooks/slurp_test'
+end

@@ -2,7 +2,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from ..sink import Echo, Drop
+from ..sink import Echo, Drop, Tally
 
 try:
     from elasticsearch import ElasticSearch

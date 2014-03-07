@@ -50,6 +50,7 @@ Editing a channel's state:
 
 Use --help on sub-commands to see usage details. 
 """
+from __future__ import print_function
 import argparse
 import fnmatch
 import logging.config
@@ -90,7 +91,8 @@ def touch_all(args):
         args.config.channel,
         filter(ChannelFilter(args.includes, args.excludes), args.config.channel_names)
     )
-    slurp.touch(args.files, channels)
+    for result in slurp.touch(args.files, channels):
+        print(*result)
 
 
 def tell_all_parser(cmds, parents):
@@ -113,7 +115,8 @@ def tell_all(args):
         args.config.channel,
         filter(ChannelFilter(args.includes, args.excludes), args.config.channel_names)
     )
-    slurp.tell(args.files, channels)
+    for result in slurp.tell(args.files, channels):
+        print(*result)
 
 
 def reset_all_parser(cmds, parents):
@@ -141,7 +144,7 @@ def reset_all(args):
             source = channel.match(file_path)
             if not source:
                 continue
-            print file_path, channel.name, source.name, 0
+            print(file_path, channel.name, source.name, 0)
 
 
 def consume_all_parser(cmds, parents):
@@ -162,6 +165,11 @@ def consume_all_parser(cmds, parents):
         help='short circuits CHANNELs to only print processed blocks',
     )
     cmd.add_argument(
+        '-t', '--tally',
+        action='store_true',
+        help='short circuits CHANNELs to only tally processed blocks',
+    )
+    cmd.add_argument(
         '-b', '--backfill',
         action='store_true',
         help='forces CHANNELs to back-fill FILE(s)',
@@ -179,6 +187,8 @@ def consume_all(args):
     overrides = {}
     if args.dry:
         overrides.update(dry_overrides)
+    if args.tally:
+        overrides.update(tally_overrides)
     if args.backfill:
         overrides['backfill'] = True
     if args.stats:
@@ -187,7 +197,9 @@ def consume_all(args):
         lambda x: args.config.channel(x, stats=args.stats, **overrides),
         filter(ChannelFilter(args.includes, args.excludes), args.config.channel_names)
     )
-    slurp.consume(args.files, channels)
+    for result in slurp.consume(args.files, channels):
+        print(*result)
+
 
 
 def watch_all_parser(cmds, parents):
@@ -207,6 +219,11 @@ def watch_all_parser(cmds, parents):
         help='short circuits CHANNELs to only print processed blocks',
     )
     cmd.add_argument(
+        '-t', '--tally',
+        action='store_true',
+        help='short circuits CHANNELs to only tally processed blocks',
+    )
+    cmd.add_argument(
         '-b', '--backfill',
         action='store_true',
         help='forces CHANNELs to back-fill FILE(s)',
@@ -224,8 +241,11 @@ def watch_all(args):
     overrides = {}
     if args.dry:
         overrides.update(dry_overrides)
+    if args.tally:
+        overrides.update(tally_overrides)
     if args.backfill:
         overrides['backfill'] = True
+
     if args.stats:
         init_stats(args)
     channels = map(
@@ -248,7 +268,7 @@ def source_list_parser(cmds, parents):
 
 def source_list(args):
     for name in args.config.source_names:
-        print name
+        print(name)
 
 
 def source_parser(cmds, parents):
@@ -349,7 +369,7 @@ def channel_list_parser(cmds, parents):
 
 def channel_list(args):
     for name in args.config.channel_names:
-        print name
+        print(name)
 
 
 def channel_parser(cmds, parents):
@@ -405,7 +425,8 @@ def channel_touch_parser(cmds, parents):
 
 def channel_touch(args):
     channels = [args.config.channel(args.channel[0])]
-    slurp.touch(args.files, channels)
+    for result in slurp.touch(args.files, channels):
+        print(*result)
 
 
 def channel_tell_parser(cmds, parents):
@@ -424,7 +445,8 @@ def channel_tell_parser(cmds, parents):
 
 def channel_tell(args):
     channels = [args.config.channel(args.channel[0])]
-    slurp.tell(args.files, channels)
+    for result in slurp.tell(args.files, channels):
+        print(*result)
 
 
 def channel_reset_parser(cmds, parents):
@@ -443,7 +465,8 @@ def channel_reset_parser(cmds, parents):
 
 def channel_reset(args):
     channels = [args.config.channel(args.channel[0])]
-    slurp.reset(args.files, channels)
+    for result in slurp.reset(args.files, channels):
+        print(*result)
 
 def channel_edit_parser(cmds, parents):
     cmd = cmds.add_parser(
@@ -477,6 +500,16 @@ def channel_consume_parser(cmds, parents):
         help='short circuits CHANNEL to only print processed blocks',
     )
     cmd.add_argument(
+        '-t', '--tally',
+        action='store_true',
+        help='short circuits CHANNELs to only tally processed blocks',
+    )
+    cmd.add_argument(
+        '-r', '--reset',
+        action='store_true',
+        help='forces CHANNEL to reset channel state (i.e. offset information) for FILE(s)',
+    )
+    cmd.add_argument(
         '-b', '--backfill',
         action='store_true',
         help='forces CHANNEL to back-fill FILE(s)',
@@ -494,12 +527,15 @@ def channel_consume(args):
     overrides = {}
     if args.dry:
         overrides.update(dry_overrides)
+    if args.tally:
+        overrides.update(tally_overrides)
     if args.backfill:
         overrides['backfill'] = True
     if args.stats:
         init_stats(args)
     channels = [args.config.channel(args.channel[0], stats=args.stats, **overrides)]
-    slurp.consume(args.files, channels)
+    for result in slurp.consume(args.files, channels, args.reset):
+        print(*result)
 
 
 def channel_watch_parser(cmds, parents):
@@ -517,6 +553,11 @@ def channel_watch_parser(cmds, parents):
         '-d', '--dry',
         action='store_true',
         help='short circuits CHANNEL to print processed blocks',
+    )
+    cmd.add_argument(
+        '-t', '--tally',
+        action='store_true',
+        help='short circuits CHANNELs to only tally processed blocks',
     )
     cmd.add_argument(
         '-b', '--backfill',
@@ -620,6 +661,11 @@ def shell_ipython(namespace):
 
 dry_overrides = {
     'sink': slurp.Echo('dry'),
+    'track':  False
+}
+
+tally_overrides = {
+    'sink': slurp.Tally('dry'),
     'track':  False
 }
 
