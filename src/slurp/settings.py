@@ -2,7 +2,6 @@ from ConfigParser import ConfigParser
 import inspect
 import logging
 import re
-import shlex
 import textwrap
 
 import pilo
@@ -174,12 +173,8 @@ class Code(String):
             ))
         return code_globals[name]
 
-    def _parse(self, value):
-        # already
-        if not isinstance(value, basestring):
-            return value
-
-        value = super(Code, self)._parse(value)
+    def _parse(self, path):
+        value = super(Code, self)._parse(path)
         if value in IGNORE:
             return value
 
@@ -207,88 +202,12 @@ class Code(String):
         return pilo.ERROR
 
 
-class SourcePath(list):
+class Source(pilo.source.ConfigSource):
 
-    def __init__(self, src, *args, **kwargs):
-        self.src = src
-        super(SourcePath, self).__init__(*args, **kwargs)
-
-    def __str__(self):
-        parts = []
-        if self.src.file_path:
-            parts.append(self.src.file_path)
-        parts.append('[{0}]'.format(self.src.section))
-        field = ''.join(([self[0]] + ['[{0}]'.format(f) for f in self[1:]]))
-        parts.append(field)
-        return ' '.join(parts)
-
-
-class Source(pilo.Source):
-
-    def __init__(self, config, section, file_path=None):
-        super(Source, self).__init__()
-        self.source = config
-        self.section = section
-        self.file_path = file_path
-        self.parsers = {
-            basestring: self._as_string,
-            bool: self._as_boolean,
-            int: self._as_integer,
-            float: self._as_float,
-        }
-
-    def path(self, key=None):
-        src_path = getattr(pilo.ctx, 'src_path', None)
-        if src_path is None:
-            src_path = SourcePath(self)
-        if key in (None, pilo.NONE):
-            return src_path
-        return SourcePath(self, src_path + [key])
-
-    def resolve(self, key):
-        path = self.path(key)
-
-        # option
-        if len(path) == 1:
-            option = path[0]
-            if self.source.has_option(self.section, option):
-                return option
-            return pilo.NONE
-
-        # container
-        if len(path) == 2:
-            option = '{0}[{1}]'.format(*path)
-            if self.source.has_option(self.section, option):
-                return option
-            return pilo.NONE
-
-        return pilo.NONE
-
-    def sequence(self, key):
-        if not self.source.has_option(self.section, key):
-            return pilo.NONE
-        raw = self.source.get(self.section, key)
-        count = 0
-        for i, value in enumerate(shlex.split(raw)):
-            self.source.set(self.section, '{0}[{1}]'.format(key, i), value)
-            count += 1
-        return count
-
-    def mapping(self, key):
-        pattern = key + '\[(\w+)\]'
-        keys = []
-        for option in self.source.options(self.section):
-            m = re.match(pattern, option)
-            if not m:
-                continue
-            keys.append(m.group(1))
-        if not keys:
-            return pilo.NONE
-        return keys
-
-    def _as_raw(self, option):
+    def as_raw(self, path):
+        option = path[-1]
         lines = []
-        with open(self.file_path, 'r') as fo:
+        with open(self.location, 'r') as fo:
             section_header = '[{}]'.format(self.section)
             for line in fo:
                 if line.strip() == section_header:
@@ -302,13 +221,11 @@ class Source(pilo.Source):
                 lines.append(line)
         return textwrap.dedent(''.join(lines))
 
-    def parse(self, key, option, type):
-        value = self.source.get(self.section, option)
-        if type is not None:
-            value = self.parser_for(type)(key, value)
+    def primitive(self, path, type=None):
+        value = super(Source, self).primitive(path, type)
 
         # HACK: preserve white-space for mulit-line strings
         if isinstance(value, basestring) and value.count('\n') > 0:
-            value = self._as_raw(option)
+            value = self.as_raw(path)
 
         return value

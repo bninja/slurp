@@ -28,14 +28,14 @@ Field = pilo.Field
 
 SubForm = pilo.fields.SubForm
 
-class Datetime(pilo.fields.Datetime):
+class Datetime(pilo.fields.String):
 
     def __init__(self, *args, **kwargs):
         self.format = kwargs.pop('format')
         super(Datetime, self).__init__(*args, **kwargs)
 
     def _parse(self, value):
-        value = self.ctx.src.parse(self.src, value, basestring)
+        value = self.ctx.src_path.primitive(basestring)
         try:
             return arrow.get(value, self.format).datetime
         except arrow.parser.ParserError, ex:
