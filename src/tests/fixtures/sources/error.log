@@ -1,0 +1,55 @@
+2014-02-20 11:36:58,867 : ERROR : sterling.wag : 31670 : Dummy-2 : guru_id=OHM4ea99eda9a2311e398d6069b72f5f856 : 409: Marketplace already created.
+Traceback (most recent call last):
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/flask/app.py", line 1262, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/flask/app.py", line 1248, in dispatch_request
+    return self.view_functions[rule.endpoint](**req.view_args)
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/sterling/l00b.py", line 825, in _dispatch
+    result = handler()
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/balanced_service/resources/marketplaces/controllers/rev1.py", line 14, in create
+    forms.create_marketplace,
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/sterling/l00b.py", line 920, in _create
+    obj = op(**result)
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/balanced_service/resources/marketplaces/forms/__init__.py", line 29, in create_marketplace
+    marketplace = models.Marketplace.create(**kwargs)
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/balanced_service/models/marketplaces.py", line 320, in create
+    raise MarketplaceError.AlreadyCreated()
+LogicalError: 409: Marketplace already created.
+2014-02-20 11:37:03,701 : INFO : balanced_service.models.funding_instruments.bank_accounts : 31670 : Dummy-2 : guru_id=OHM51953fd29a2311e398d6069b72f5f856 : client_headers: {'ip_address': None}
+2014-02-20 11:37:05,129 : INFO : balanced_service.models.funding_instruments.bank_accounts : 31670 : Dummy-2 : guru_id=OHM5295634e9a2311e398d6069b72f5f856 : client_headers: {'ip_address': None}
+2014-02-20 11:37:07,939 : ERROR : sterling.wag : 31670 : Dummy-2 : guru_id=OHM544228629a2311e398d6069b72f5f856 : 409: Marketplace TEST-MP2uzkghxKDIzTHHxpjHPNWe has insufficient funds to cover a transfer of 9001.
+Traceback (most recent call last):
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/flask/app.py", line 1262, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/flask/app.py", line 1248, in dispatch_request
+    return self.view_functions[rule.endpoint](**req.view_args)
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/sterling/l00b.py", line 825, in _dispatch
+    result = handler()
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/balanced_service/resources/credits/controllers/rev1.py", line 45, in create
+    return _create()
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/balanced_service/resources/credits/controllers/rev1.py", line 64, in _create_under_funding_instrument
+    forms.rev1.create_funding_instrument_credit,
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/sterling/l00b.py", line 920, in _create
+    obj = op(**result)
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/balanced_service/resources/credits/forms/rev1.py", line 116, in create_funding_instrument_credit
+    **kwargs
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/balanced_service/models/funding_instruments/__init__.py", line 522, in credit_promise
+    guid=guid,
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/balanced_service/models/funding_instruments/__init__.py", line 456, in stage_credit
+    debits=None,
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/balanced_service/models/transactions/__init__.py", line 68, in wrapper
+    result = fn(*a, **kw)
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/balanced_service/models/transactions/credits.py", line 207, in stage
+    cls.reconcile_sink.staged(credit)
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/balanced_service/models/processors.py", line 486, in staged
+    self._on(self.states.STAGED, None, target)
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/balanced_service/models/processors.py", line 516, in _on
+    sink(state, prev_state, target)
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/balanced_service/models/processors.py", line 580, in __call__
+    transition(target)
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/balanced_service/models/processors.py", line 648, in init_adjust
+    self.adjust(target)
+  File "/opt/balanced/embedded/lib/python2.7/site-packages/balanced_service/models/funding_instruments/accounts.py", line 441, in adjust
+    destination=self.destination,
+LogicalError: 409: Marketplace TEST-MP2uzkghxKDIzTHHxpjHPNWe has insufficient funds to cover a transfer of 9001.
+2014-02-20 11:37:10,461 : INFO : balanced_service.models.funding_instruments.bank_accounts : 31670 : Dummy-2 : guru_id=OHM55c2d79a9a2311e398d6069b72f5f856 : client_headers: {'ip_address': None}

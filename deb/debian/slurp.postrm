@@ -1,0 +1,24 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+    purge)
+        # remove directories
+        rm -rf /var/lib/slurp
+        rm -rf /etc/slurp
+
+        # remove user
+        if ! getent passwd slurp > /dev/null; then
+            deluser slurp || true
+        fi
+    ;;
+
+    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+    ;;
+    
+    *)
+    ;;
+esac
+
+#DEBHELPER#

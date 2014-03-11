@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -e
+
+# http://unix.stackexchange.com/a/104682
+if which pyclean >/dev/null 2>&1; then
+    pyclean -p slurp 
+else
+    dpkg -L slurp | grep \.py$ | while read file
+    do
+        rm -f "${file}"[co] >/dev/null
+    done
+fi
+
+#DEBHELPER#

@@ -1,0 +1,16 @@
+[slurp]
+state_dir = <%= node['slurp']['state_dir'] %>
+track = <%= node['slurp']['track']  ? "true" : "false" %>
+backfill = <%= node['slurp']['backfill'] ? "true" : "false" %>
+strict = <%= node['slurp']['strict'] ? "true" : "false" %>
+strict_slack = <%= node['slurp']['strict_slack'] %>
+read_size = <%= node['slurp']['read_size'] %>
+buffer_size = <%= node['slurp']['buffer_size'] %>
+batch_size = <%= node['slurp']['batch_size'] %>
+includes = <%= node['slurp']['includes_dir'] %>/*
+<% if node['slurp']['newrelic_file'] -%>
+newrelic_file = <%= node['slurp']['newrelic_file'] %> 
+<% end -%>
+<% if node['slurp']['newrelic_env'] -%>
+newrelic_env = <%= node['slurp']['newrelic_env'] %>
+<% end -%>

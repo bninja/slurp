@@ -1,0 +1,3 @@
+etc/slurp
+etc/slurp/conf.d
+var/lib/slurp

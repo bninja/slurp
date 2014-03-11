@@ -1,0 +1,24 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+    configure)
+        # create user
+        if ! getent passwd slurp > /dev/null; then
+            adduser --system --quiet --home /usr/lib/slurp --no-create-home --shell /bin/bash --group --gecos "slurp" slurp
+        fi
+    
+        # byte compile
+        /usr/lib/slurp/bin/python -m compileall /usr/lib/slurp
+    
+        # ensure directory ownership
+        chown slurp:slurp /var/lib/slurp
+        chown slurp:slurp -R /etc/slurp
+    ;;
+
+    *)
+    ;;
+esac
+
+#DEBHELPER#

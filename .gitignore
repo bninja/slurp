@@ -7,7 +7,6 @@ dist
 build
 eggs
 parts
-bin
 var
 sdist
 develop-eggs
@@ -32,3 +31,12 @@ docs/_build
 # pydev
 .pydevproject
 .project
+
+# md preview
+.*.md.html
+
+# chef
+chef/.kitchen/
+chef/Berksfile.lock
+chef/.kitchen/
+chef/Gemfile.lock
