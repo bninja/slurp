@@ -12,7 +12,7 @@ extras_require = {
 
 tests_require = [
     'nose >=1.1.0',
-    'mock ==0.8',
+    'mock >=1.0,<2.0',
     'unittest2 >=0.5.1',
     'coverage',
 ] + [v for v in extras_require.itervalues()]
