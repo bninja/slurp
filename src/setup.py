@@ -33,7 +33,7 @@ setuptools.setup(
     author_email='egon@gb.com',
     install_requires=[
         'arrow >=0.4.2,<0.5',
-        'pilo ==0.2.1',
+        'pilo >=0.2,<0.3',
     ],
     extras_require=extras_require,
     packages=[

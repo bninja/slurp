@@ -87,15 +87,13 @@ class SourceSettings(Settings):
     pattern = settings.String()
 
     @pattern.parse
-    def pattern(self, value):
-        parsed = self.ctx.field._parse(value)
-        if parsed in form.IGNORE:
-            return parsed
+    def pattern(self, path):
+        value = path.primitive(basestring)
         flags = re.VERBOSE
         if self.prefix:
             flags |= re.DOTALL
         try:
-            return re.compile(parsed, flags)
+            return re.compile(value, flags)
         except re.error, ex:
             self.ctx.errors.invalid(str(ex))
             return form.ERROR

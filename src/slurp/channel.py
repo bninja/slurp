@@ -69,10 +69,8 @@ class ChannelSettings(Settings):
     sources = settings.List(settings.String(), default=[])
 
     @sources.field.parse
-    def sources(self, value):
-        section = type(self).sources.field._parse(value)
-        if section in settings.IGNORE:
-            return section
+    def sources(self, path):
+        section = path.primitive(basestring)
         if section not in self.ctx.config.source_names:
             self.ctx.errors.invalid('"{0}" is not a source'.format(section))
             return settings.ERROR
@@ -106,10 +104,8 @@ class ChannelSettings(Settings):
     sink = settings.String()
 
     @sink.parse
-    def sink(self, value):
-        section = type(self).sources.field._parse(value)
-        if section in settings.IGNORE:
-            return section
+    def sink(self, path):
+        section = path.primitive(basestring)
         if section not in self.ctx.config.sink_names:
             self.ctx.errors.invalid('"{0}" is not a sink'.format(section))
             return settings.ERROR

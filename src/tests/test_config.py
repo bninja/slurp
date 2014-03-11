@@ -5,6 +5,30 @@ from  . import TestCase
 
 class TestConfig(TestCase):
 
+    def test_source_settings(self):
+        includes = [
+            self.fixture('conf', 'conf.d', '*.conf'),
+            self.fixture('conf', 'conf.d', '*.py'),
+        ]
+        config = slurp.Config(
+            includes=includes,
+        )
+        settings = config.source_settings('balanced-error')
+        self.assertItemsEqual([
+            'terminal',
+            'form',
+            'pattern',
+            'filter',
+            'strict',
+            'prefix',
+            'read_size',
+            'buffer_size',
+            'globs',
+        ], settings.keys())
+        self.assertIsNotNone(settings.prefix)
+        self.assertIsNotNone(settings.terminal)
+        self.assertIsNotNone(settings.pattern)
+
     def test_scan(self):
         includes = [
             self.fixture('conf', 'conf.d', '*.conf'),
@@ -15,6 +39,7 @@ class TestConfig(TestCase):
         )
         self.assertItemsEqual([
             'balanced-access',
+            'balanced-error',
             'nginx-error',
             'balanced-sentry',
             'nginx-access',

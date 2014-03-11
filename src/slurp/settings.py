@@ -69,12 +69,12 @@ class Pattern(pilo.Field):
         self.flags = kwargs.pop('flags', 0)
         super(Pattern, self).__init__(*args, **kwargs)
 
-    def _parse(self, value):
-        parsed = super(Pattern, self)._parse(value)
-        if parsed in IGNORE:
-            return parsed
+    def _parse(self, path):
+        value = super(Pattern, self)._parse(path)
+        if value in IGNORE:
+            return value
         try:
-            return re.compile(parsed, self.flags)
+            return re.compile(value, self.flags)
         except re.error, ex:
             self.ctx.errors.invalid(str(ex))
             return ERROR
