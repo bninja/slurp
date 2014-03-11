@@ -208,7 +208,7 @@ class Source(pilo.source.ConfigSource):
         option = path[-1]
         lines = []
         with open(self.location, 'r') as fo:
-            section_header = '[{}]'.format(self.section)
+            section_header = '[{0}]'.format(self.section)
             for line in fo:
                 if line.strip() == section_header:
                     break

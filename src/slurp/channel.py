@@ -180,7 +180,7 @@ class Channel(object):
             if editor:
                 break
         else:
-            raise Exception('Must define one of {}'.format(', '.join(editors)))
+            raise Exception('Must define one of {0}'.format(', '.join(editors)))
         logger.debug('using editor "%s"', editor)
         return editor
 
@@ -415,7 +415,7 @@ class ChannelSource(Source):
 
     def seek(self, path, offset):
         if not self.match(path):
-            raise ValueError('"{}" does not match pattern "{}"'.format(
+            raise ValueError('"{0}" does not match pattern "{1}"'.format(
                 path, self.glob.pattern
             ))
         self.channel.tracker[path] = offset
@@ -424,7 +424,7 @@ class ChannelSource(Source):
 
     def reset(self, path, offset=0):
         if not self.match(path):
-            raise ValueError('"{}" does not match pattern "{}"'.format(
+            raise ValueError('"{0}" does not match pattern "{1}"'.format(
                 path, self.glob.pattern
             ))
         if path in self.channel.tracker:
