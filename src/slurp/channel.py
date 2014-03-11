@@ -489,7 +489,10 @@ class ChannelSource(Source):
         reset_slack = self.channel.strict_slack
         slack = reset_slack
         st = time.time()
-        with self.channel.stats_sample(), self.channel.sink:
+        with contextlib.nested(
+                self.channel.stats_sample(),
+                self.channel.sink
+            ):
             while True:
                 block = None
                 try:
