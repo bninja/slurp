@@ -5,9 +5,9 @@ import sys
 import tempfile
 
 try:
-    import unittest
-except ImportError:
     import unittest2 as unittest
+except ImportError:
+    import unittest
 
 
 class TestCase(unittest.TestCase):
