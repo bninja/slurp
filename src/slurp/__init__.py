@@ -16,7 +16,7 @@ from .source import Source, SourceSettings
 from .channel import Channel, ChannelSource, ChannelSettings, ChannelEvent
 from .config import Config
 
-__version__ = '0.6.2'
+__version__ = '0.6.3'
 
 __all__ = [
     'settings',
