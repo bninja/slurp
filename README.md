@@ -113,3 +113,4 @@ and verify the install:
 $ slurp -v
 0.6
 ```
+
