@@ -1,4 +1,42 @@
 """
+Sink for sending form(s) to email. Typical usage is:
+
+.. code:: text
+
+    [sink:nginx-email]
+    type = Email
+    host = 'smtp.exmaple.org'
+    port = 25
+    to = me@example.org 
+    rollup = true
+    template = 
+    
+        % for form in forms[:25]:
+        {form.timestamp} [{form.severity}] {form.payload.message}
+        % endfor
+        % if len(forms) > 25:
+        ... and {len(forms) - 25} more
+        % endif
+        
+Here template is an embedded `mako <http://www.makotemplates.org/>`_ template,
+but could also be pulled out to a file if you prefer:
+
+.. code:: text
+
+    [sink:nginx-email]
+    type = Email
+    host = 'smtp.exmaple.org'
+    port = 25
+    to = me@example.org 
+    rollup = true
+    template = /etc/slurp/conf.d/nginx-email.mako
+    
+The template has access to:
+
+- ``slurp``, the slurp module 
+- ``sink``, the sink instance
+- ``forms``, the forms passed to the sink
+
 """
 from __future__ import absolute_import
 
@@ -122,6 +160,7 @@ class Email(Sink):
     def flush(self):
         if not self.rollup:
             return
-        forms = self.forms
-        self.forms = []
-        self.send(self.msg(forms))
+        if self.forms:
+            forms = self.forms
+            self.forms = []
+            self.send(self.msg(forms))
