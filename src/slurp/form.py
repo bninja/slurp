@@ -2,24 +2,24 @@
 Forms are used to translate dictionaries and look like this:
 
     .. code:: python
-    
+
         import slurp
 
         class Form(slurp.Form):
-        
+
             ip = slurp.form.String()
             user = slurp.form.String(default=None)
             timestamp = slurp.form.Datetime(format='DD/MMM/YYYY:HH:mm:ss')
             method = slurp.form.String(default=None)
             uri = slurp.form.String(default=None)
             version = slurp.form.String(default=None)
-            status = slurp.form.Integer(default=None)    
+            status = slurp.form.Integer(default=None)
             bytes = slurp.form.Integer(default=0).tag('idk')
 
 Use them like this:
 
     .. code:: python
-        
+
         from pprint import pprint
 
         form = Form({

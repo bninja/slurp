@@ -7,17 +7,17 @@ Sink for sending form(s) to email. Typical usage is:
     type = Email
     host = 'smtp.exmaple.org'
     port = 25
-    to = me@example.org 
+    to = me@example.org
     rollup = true
-    template = 
-    
+    template =
+
         % for form in forms[:25]:
         {form.timestamp} [{form.severity}] {form.payload.message}
         % endfor
         % if len(forms) > 25:
         ... and {len(forms) - 25} more
         % endif
-        
+
 Here template is an embedded `mako <http://www.makotemplates.org/>`_ template,
 but could also be pulled out to a file if you prefer:
 
@@ -27,13 +27,13 @@ but could also be pulled out to a file if you prefer:
     type = Email
     host = 'smtp.exmaple.org'
     port = 25
-    to = me@example.org 
+    to = me@example.org
     rollup = true
     template = /etc/slurp/conf.d/nginx-email.mako
-    
+
 The template has access to:
 
-- ``slurp``, the slurp module 
+- ``slurp``, the slurp module
 - ``sink``, the sink instance
 - ``forms``, the forms passed to the sink
 

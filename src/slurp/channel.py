@@ -224,11 +224,11 @@ class Channel(object):
     def edit(self, io=None):
         """
         Edits the tracking state for this channel.
-        
+
         :param io:
             File-like object to read new state from. If None we'll spawn an
             editor you can use to change state. Defaluts to None.
-            
+
         :return:
             True if state was edited otherwise False.
         """
@@ -273,7 +273,7 @@ class Channel(object):
 
     def worker(self, **kwargs):
         """
-        Create a `ChannelWorker` used to asynchronously consume source blocks. 
+        Create a `ChannelWorker` used to asynchronously consume source blocks.
         """
         return ChannelWorker(self, **kwargs)
 
@@ -286,19 +286,19 @@ class Channel(object):
     def consume(self, fo, source=None):
         """
         Convenience for consuming blocks from a source file.
-        
+
         :param fo:
             Either a file-like object or a path to a file.
 
         :param source:
             The source for `fo`. If None the channel will match to a source.
-            
+
         :return:
             A tuple of:
 
                 - count of blocks consumed
                 - bytes number of bytes in those blocks
-                - errors number of blocks that could not be consumed due to an error 
+                - errors number of blocks that could not be consumed due to an error
                 - elapsed time
 
         """
