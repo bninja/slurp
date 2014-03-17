@@ -1,4 +1,8 @@
+import os
+import shutil
 from StringIO import StringIO
+import threading
+import time
 
 import slurp
 
@@ -163,10 +167,11 @@ class TestConsume(TestCase):
              ],
             [channel],
         ))
-        self.assertItemsEqual([
-            ('tc', 'ts', '{0}/sources/nginx-access.log'.format(self.fixture()), 6, 1449, 0),
-            ('tc', 'ts', '{0}/sources/nginx-error.log'.format(self.fixture()), 3, 1140, 0),
-            ], results)
+        matches = [
+            ('ts', '{0}/sources/nginx-access.log'.format(self.fixture())),
+            ('ts', '{0}/sources/nginx-error.log'.format(self.fixture()))
+        ]
+        self.assertItemsEqual([('tc', matches, 9, 2589, 0)], results)
         self.assertDictEqual({
             '{0}/sources/nginx-access.log'.format(self.fixture()): 1449,
             '{0}/sources/nginx-error.log'.format(self.fixture()): 1140,
@@ -197,8 +202,11 @@ class TestConsume(TestCase):
         results = list(
             slurp.consume([self.fixture('sources', 'nginx-access.log')], [channel])
         )
+        matches = [
+            ('ts', '{0}/sources/nginx-access.log'.format(self.fixture()))
+        ]
         self.assertItemsEqual([
-            ('tc', 'ts', '{0}/sources/nginx-access.log'.format(self.fixture()), 2, 536, 0),
+            ('tc', matches, 2, 536, 0),
         ], results)
         self.assertDictEqual({
             '{0}/sources/nginx-access.log'.format(self.fixture()): 1449,
@@ -215,8 +223,11 @@ class TestConsume(TestCase):
         results = list(
             slurp.consume([self.fixture('sources', 'nginx-access.log')], [channel])
         )
+        matches = [
+            ('ts', '{0}/sources/nginx-access.log'.format(self.fixture())),
+        ]
         self.assertItemsEqual([
-            ('tc', 'ts', '{0}/sources/nginx-access.log'.format(self.fixture()), 0, 0, 6),
+            ('tc', matches, 0, 0, 6),
         ], results)
         self.assertDictEqual({
             '{0}/sources/nginx-access.log'.format(self.fixture()): 1449,
@@ -226,5 +237,58 @@ class TestConsume(TestCase):
 
 class TestWatch(TestCase):
 
+    def _channel(self, **kwargs):
+        settings = {
+            'sink': slurp.Drop('tk'),
+            'state_dir': self.tmp_dir(),
+            'track': True,
+            'backfill':True,
+        }
+        settings.update(kwargs)
+        channel = slurp.Channel('tc', **settings)
+        channel.add_source('ts', ['*/*', '*'], r'(?P<all>.*)')
+        return channel
 
-    pass
+
+    def test_count(self):
+
+        blocks = []
+        watch_timeout = 20.0
+        watch_delay = 1.0
+        started_at = time.time()
+        dir_path = self.tmp_dir()
+
+        class Sink(slurp.Sink):
+
+            def __call__(self, form, block):
+                blocks.append((block.begin, block.end))
+
+        channel = self._channel(sink=Sink('tk'), strict=False, backfill=True)
+
+        def watch():
+            slurp.watch([dir_path], [channel], timeout=watch_timeout, stop=stop)
+
+        def stop(notifier):
+            return len(blocks) >= 6 or started_at + watch_timeout < time.time()
+
+        threads = [threading.Thread(target=watch)]
+        for thread in threads:
+            thread.daemon = True
+            thread.start()
+
+        time.sleep(watch_delay)
+
+        file_path = os.path.join(dir_path, 'nginx-access.log')
+        shutil.copyfile(self.fixture('sources', 'nginx-access.log'), file_path)
+
+        for thread in threads:
+            thread.join()
+
+        self.assertListEqual([
+            (0, 119),
+            (119, 385),
+            (385, 657),
+            (657, 913),
+            (913, 1177),
+            (1177, 1449),
+        ], blocks)

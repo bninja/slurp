@@ -109,3 +109,49 @@ guru_id=(?:(?P<guru_id>\w+)|-)|
             list(src.forms(self.open_fixture('sources', 'access.log'))),
             []
         )
+
+
+    def test_error_lax(self):
+        src = slurp.Source(
+            'test-source',
+            globs=[],
+            pattern=self.pattern,
+            form=self.Form,
+            strict=False,
+        )
+        io = self.io_fixture("""\
+127.0.0.1 - - [20/Feb/2014:11:37:58] "POST /bank_accounts/BA3sCBsRa9KvqHqZnnV2n6UC/credits HTTP/1.1" 201 930 "-" "balanced-python/1.0.1beta2" request_time_seconds=0 request_time_microseconds=461208 build=- guru_id=OHM71e9d0d69a2311e38b8f069b72f5f856 merchant_guid=TEST-MR2gw65aJvFKph1RvviXqbSS marketplace_guid=TEST-MP2hfNOzdNcYKaoO78R6zpbw
+gobble
+127.0.0.1 - - [20/Feb/2014:11:37:58] "POST /credits/CR3sPVGSAkPYA9vp1lshEMv4/reversals HTTP/1.1" 201 740 "-" "balanced-python/1.0.1beta2" request_time_seconds=0 request_time_microseconds=622211 build=- guru_id=OHM72459e7a9a2311e38b8f069b72f5f856 merchant_guid=TEST-MR2gw65aJvFKph1RvviXqbSS marketplace_guid=TEST-MP2hfNOzdNcYKaoO78R6zpbw
+a.b.c.d - - [20/Feb/2014:11:37:58] "POST /credits/CR3sPVGSAkPYA9vp1lshEMv4/reversals HTTP/1.1" 201 740 "-" "balanced-python/1.0.1beta2" request_time_seconds=0 request_time_microseconds=622211 build=- guru_id=OHM72459e7a9a2311e38b8f069b72f5f856 merchant_guid=TEST-MR2gw65aJvFKph1RvviXqbSS marketplace_guid=TEST-MP2hfNOzdNcYKaoO78R6zpbw
+127.0.0.1 - - [20/Feb/2014:99:37:58] "POST /credits/CR3sPVGSAkPYA9vp1lshEMv4/reversals HTTP/1.1" 201 740 "-" "balanced-python/1.0.1beta2" request_time_seconds=0 request_time_microseconds=622211 build=- guru_id=OHM72459e7a9a2311e38b8f069b72f5f856 merchant_guid=TEST-MR2gw65aJvFKph1RvviXqbSS marketplace_guid=TEST-MP2hfNOzdNcYKaoO78R6zpbw
+""")
+        blocks = [
+            (block.begin, block.end)
+            for _, block in src.forms(io)
+        ]
+        self.assertListEqual([
+            (0, 341), (348, 685)
+        ], blocks)
+
+    def test_error_strict(self):
+        src = slurp.Source(
+            'test-source',
+            globs=[],
+            pattern=self.pattern,
+            form=self.Form,
+            strict=True,
+        )
+        io = self.io_fixture("""\
+127.0.0.1 - - [20/Feb/2014:11:37:58] "POST /bank_accounts/BA3sCBsRa9KvqHqZnnV2n6UC/credits HTTP/1.1" 201 930 "-" "balanced-python/1.0.1beta2" request_time_seconds=0 request_time_microseconds=461208 build=- guru_id=OHM71e9d0d69a2311e38b8f069b72f5f856 merchant_guid=TEST-MR2gw65aJvFKph1RvviXqbSS marketplace_guid=TEST-MP2hfNOzdNcYKaoO78R6zpbw
+127.0.0.1 - - [20/Feb/2014:99:37:58] "POST /credits/CR3sPVGSAkPYA9vp1lshEMv4/reversals HTTP/1.1" 201 740 "-" "balanced-python/1.0.1beta2" request_time_seconds=0 request_time_microseconds=622211 build=- guru_id=OHM72459e7a9a2311e38b8f069b72f5f856 merchant_guid=TEST-MR2gw65aJvFKph1RvviXqbSS marketplace_guid=TEST-MP2hfNOzdNcYKaoO78R6zpbw
+127.0.0.1 - - [20/Feb/2014:11:37:58] "POST /credits/CR3sPVGSAkPYA9vp1lshEMv4/reversals HTTP/1.1" 201 740 "-" "balanced-python/1.0.1beta2" request_time_seconds=0 request_time_microseconds=622211 build=- guru_id=OHM72459e7a9a2311e38b8f069b72f5f856 merchant_guid=TEST-MR2gw65aJvFKph1RvviXqbSS marketplace_guid=TEST-MP2hfNOzdNcYKaoO78R6zpbw
+a.b.c.d - - [20/Feb/2014:11:37:58] "POST /credits/CR3sPVGSAkPYA9vp1lshEMv4/reversals HTTP/1.1" 201 740 "-" "balanced-python/1.0.1beta2" request_time_seconds=0 request_time_microseconds=622211 build=- guru_id=OHM72459e7a9a2311e38b8f069b72f5f856 merchant_guid=TEST-MR2gw65aJvFKph1RvviXqbSS marketplace_guid=TEST-MP2hfNOzdNcYKaoO78R6zpbw
+""")
+        blocks = []
+        with self.assertRaises(ValueError):
+            for _, block in src.forms(io):
+                blocks.append((block.begin, block.end))
+        self.assertListEqual([
+            (0, 341)
+        ], blocks)

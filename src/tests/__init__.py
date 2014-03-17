@@ -29,9 +29,13 @@ class TestCase(unittest.TestCase):
         return cls.open_fixture(*path).read()
 
     @classmethod
+    def io_fixture(cls, raw):
+        return StringIO(raw)
+
+    @classmethod
     def tmp_dir(cls):
         return tempfile.mkdtemp()
 
     @classmethod
-    def tmp_file(cls):
-        return tempfile.mktemp(prefix='slurp-test-')
+    def tmp_file(cls, dir=None):
+        return tempfile.mktemp(prefix='slurp-test-', dir=dir)

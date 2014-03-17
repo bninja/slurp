@@ -124,16 +124,17 @@ class Email(Sink):
         self.timeout = timeout
         self.creds = creds
         self.forms = []
+        self.blocks = []
 
-    def render(self, forms):
+    def render(self, forms, blocks):
         try:
-            return self.template.render(slurp=slurp, sink=self, forms=forms)
+            return self.template.render(slurp=slurp, sink=self, forms=forms, blocks=blocks)
         except:
             logger.exception(mako.exceptions.text_error_template().render())
             raise
 
-    def msg(self, forms):
-        text = self.render(forms)
+    def msg(self, forms, blocks):
+        text = self.render(forms, blocks)
         msg = email.mime.text.MIMEText(text)
         msg['Subject'] = self.name
         msg['From'] = self.from_address
@@ -154,8 +155,9 @@ class Email(Sink):
     def __call__(self, form, block):
         if self.rollup:
             self.forms.append(form)
+            self.blocks.append(block)
             return True
-        self.send(self.msg([form]))
+        self.send(self.msg([form], [block]))
 
     def flush(self):
         if not self.rollup:
@@ -163,4 +165,6 @@ class Email(Sink):
         if self.forms:
             forms = self.forms
             self.forms = []
-            self.send(self.msg(forms))
+            blocks = self.blocks
+            self.blocks = []
+            self.send(self.msg(forms, blocks))

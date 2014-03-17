@@ -108,43 +108,41 @@ def consume(file_paths, channels, reset=False):
         Flag indicating whether existing offset information should be reset
         when consuming blocks.
     """
-    for path in file_paths:
-        matches = 0
-        for channel in channels:
-            # file path
-            if isinstance(path, basestring):
-                source = channel.match(path)
-                if not source:
-                    continue
-                matches += 1
-            # source name, file path
-            elif isinstance(path, tuple):
-                source_name, path = path
-                for source in channel.sources:
-                    if source.name == source_name:
-                        break
+    for channel in channels:
+        matches = []
+        with channel.consumer() as consume:
+            for path in file_paths:
+                # file path
+                if isinstance(path, basestring):
+                    source = channel.match(path)
+                    if not source:
+                        continue
+                # source name, file path
+                elif isinstance(path, tuple):
+                    from ipdb import set_trace; set_trace()
+                    source_name, path = path
+                    for source in channel.sources:
+                        if source.name == source_name:
+                            break
+                    else:
+                        continue
+                # file-like
                 else:
-                    continue
-                matches += 1
-            # file-like
-            else:
-                if len(channel.sources) > 1:
-                    raise ValueError(
-                       'Cannot determine channel {0} source for {1}'.format(channel, path)
-                    )
-                source = channel.sources[0]
-                matches += 1
+                    if len(channel.sources) > 1:
+                        raise ValueError(
+                           'Cannot determine channel {0} source for {1}'.format(channel, path)
+                        )
+                    source = channel.sources[0]
 
-            # reset it
-            if reset:
-                source.reset(path)
+                # reset it
+                if reset:
+                    source.reset(path)
 
-            # eat it
-            count, bytes, errors, delta = source.consume(path)
-            path_name = path if isinstance(path, basestring) else getattr(path, 'name', '<memory>')
-            yield channel.name, source.name, path_name, count, bytes, errors
-
-        logger.debug('"%s" matched %s channel(s)', path, matches)
+                # eat it
+                consume(path, source)
+                path_name = path if isinstance(path, basestring) else getattr(path, 'name', '<memory>')
+                matches.append((source.name, path_name))
+        yield channel.name, matches, consume.count, consume.bytes, consume.errors
 
 
 if pyinotify:
@@ -212,7 +210,7 @@ if pyinotify:
                     self.on_modify_file(path)
 
 
-def watch(paths, channels, recursive=True, auto_add=True):
+def watch(paths, channels, timeout=None, stop=None, recursive=True, auto_add=True):
     """
     Monitors paths (files or directories) for changes to files and consumes
     blocks from them when changes are detected.
@@ -231,11 +229,11 @@ def watch(paths, channels, recursive=True, auto_add=True):
     )
     wm = pyinotify.WatchManager()
     we = WatchEvent(channels)
-    notifier = pyinotify.Notifier(wm, default_proc_fun=we)
+    notifier = pyinotify.Notifier(wm, default_proc_fun=we, timeout=timeout)
     notifier.coalesce_events(True)
     for path in paths:
         wm.add_watch(path, mask, rec=recursive, auto_add=auto_add)
         logger.info('watching "%s"', path)
     logger.info('enter notification loop')
-    notifier.loop()
+    notifier.loop(callback=stop)
     logger.info('exit notification loop')

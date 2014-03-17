@@ -1,4 +1,10 @@
 """
+A `Channel` is what:
+
+    - consumes blocks from Source`s
+    - passes them along to a `Sink`
+    - tracks the what blocks have been processed by a `Sink`
+
 """
 import collections
 import contextlib
@@ -22,6 +28,8 @@ from . import settings, Settings, Source, form, Form
 
 
 logger = logging.getLogger(__name__)
+
+NONE = object()
 
 
 class ChannelSettings(Settings):
@@ -100,6 +108,9 @@ class ChannelSettings(Settings):
     #: Channel processing queue poll frequency in seconds.
     queue_poll = settings.Float(default=None).min(1.0)
 
+    #: Channel flush frequency in seconds. 0 means none.
+    flush_frequency = settings.Float(default=120).min(0)
+
     #: `Sink` name.
     sink = settings.String()
 
@@ -119,6 +130,9 @@ class ChannelSettings(Settings):
 
 
 class Channel(object):
+    """
+    A consumer used to feed blocks from a collections of `Source`s to a `Sink`.
+    """
 
     def __init__(self,
             name,
@@ -138,6 +152,7 @@ class Channel(object):
             queue_size=1000,
             queue_poll=10.0,
             stats=False,
+            flush_frequency=120,
         ):
         self.name = name
         self.state_dir = state_dir
@@ -149,8 +164,12 @@ class Channel(object):
             track_path = os.path.join(self.state_dir, self.name + '.track')
         else:
             track_path = ':memory:'
+        if self.state_dir:
+            self.lock_file = os.path.join(self.state_dir, self.name + '.lock')
+        else:
+            self.lock_file = None
         self.tracker = Tracker(track_path)
-        self.sink = TrackingSink(sink, self.tracker)
+        self.sink = sink
         self.backfill = backfill
         self.throttle_duration = throttle_duration
         self.throttle_backoff = throttle_backoff
@@ -161,16 +180,34 @@ class Channel(object):
         self.strict_slack = strict_slack
         self.stats = stats
         self.stats_app = newrelic.agent.application() if self.stats else None
+        self.flush_frequency = flush_frequency
 
     def match(self, path):
-        for source in self.sources:
-            if source.match(path):
-                return source
+        """
+        Determines with a file path (or file object) matches any of this
+        channels sources.
+        """
+        if isinstance(path, basestring):
+            for source in self.sources:
+                if source.match(path):
+                    return source
+            return
+        if getattr(path, 'name', None):
+            return self.match(self, path.name)
+        if len(self.channel.sources) == 1:
+            return self.channel.sources[0]
+        return
 
     def add_source(self, *args, **kwargs):
         source = ChannelSource(self, *args, **kwargs)
         self.sources.append(source)
         return source
+
+    def lock(self, timeout=None, poll=1.0):
+        """
+        Creates and advisory lock of this channel.
+        """
+        return ChannelLock(self, poll, timeout)
 
     @property
     def editor(self):
@@ -184,64 +221,230 @@ class Channel(object):
         logger.debug('using editor "%s"', editor)
         return editor
 
-    def edit(self):
-        logger.debug('generating state')
-        state = {}
-        state['tracker'] = dict(self.tracker.items())
-        raw = json.dumps(state, indent=4)
+    def edit(self, io=None):
+        """
+        Edits the tracking state for this channel.
+        
+        :param io:
+            File-like object to read new state from. If None we'll spawn an
+            editor you can use to change state. Defaluts to None.
+            
+        :return:
+            True if state was edited otherwise False.
+        """
+        if io is None:
+            logger.debug('generating state')
+            state = {}
+            state['tracker'] = dict(self.tracker.items())
+            raw = json.dumps(state, indent=4)
 
-        raw_fd, raw_path = tempfile.mkstemp(prefix='slurp-')
-        logger.debug('writing state to "%s"', raw_path)
-        ctime = os.stat(raw_path).st_mtime
-        with os.fdopen(raw_fd, 'w') as raw_fo:
-            raw_fo.write(raw)
+            raw_fd, raw_path = tempfile.mkstemp(prefix='slurp-')
+            logger.debug('writing state to "%s"', raw_path)
+            ctime = os.stat(raw_path).st_mtime
+            with os.fdopen(raw_fd, 'w') as raw_fo:
+                raw_fo.write(raw)
 
-        cmd = [self.editor, raw_path]
-        logger.debug('editing state - %s', ' '.join(cmd))
-        subprocess.check_call(cmd)
-        if os.stat(raw_path).st_mtime == ctime:
-            logger.debug('no state changes detected')
-            os.remove(raw_path)
-            return False
+            cmd = [self.editor, raw_path]
+            logger.debug('editing state - %s', ' '.join(cmd))
+            subprocess.check_call(cmd)
+            if os.stat(raw_path).st_mtime == ctime:
+                logger.debug('no state changes detected')
+                os.remove(raw_path)
+                return False
 
-        with open(raw_path, 'r') as fo:
-            form = EditForm(json.load(fo))
+            logger.debug('validating state changes from "%s"', raw_path)
+            with open(raw_path, 'r') as fo:
+                form = EditForm(json.load(fo))
+        else:
+            raw_path = '<memory>'
+            logger.debug('validating state changes from "%s"', raw_path)
+            form = EditForm(json.load(io))
+
         logger.info('applying state changes from "%s"', raw_path)
         for path, offset in form.tracker.iteritems():
             self.tracker[path] = offset
         for path in self.tracker.iterkeys():
             if path not in form.tracker:
                 del self.tracker[path]
-        os.remove(raw_path)
+        if io is None:
+            os.remove(raw_path)
 
         return True
 
-    def stats_sample(self):
+    def worker(self, **kwargs):
+        """
+        Create a `ChannelWorker` used to asynchronously consume source blocks. 
+        """
+        return ChannelWorker(self, **kwargs)
+
+    def consumer(self):
+        """
+        Create a `ChannelConsumer` instances used to consume source blocks.
+        """
+        return ChannelConsumer(self)
+
+    def consume(self, fo, source=None):
+        """
+        Convenience for consuming blocks from a source file.
+        
+        :param fo:
+            Either a file-like object or a path to a file.
+
+        :param source:
+            The source for `fo`. If None the channel will match to a source.
+            
+        :return:
+            A tuple of:
+
+                - count of blocks consumed
+                - bytes number of bytes in those blocks
+                - errors number of blocks that could not be consumed due to an error 
+                - elapsed time
+
+        """
+        st = time.time()
+        with self.consumer() as consume:
+            consume(fo, source)
+        et = time.time()
+        return consume.count, consume.bytes, consume.errors, et - st
+
+
+class ChannelConsumer(object):
+
+    def __init__(self, channel):
+        self.channel = channel
+
+        self.sink = self.channel.sink
+        self.reset_slack = self.channel.strict_slack
+        self.slack = self.channel.strict_slack
+        self.tracker = self.channel.tracker
+
+        self.count = 0
+        self.bytes = 0
+        self.pending = 0
+        self.errors = 0
+        self.flush_at = None
+        self.pending_tracker = {}
+
+    def stats(self):
 
         @contextlib.contextmanager
         def Dummy(*args, **kwargs):
             yield
 
-        return (newrelic.agent.BackgroundTask if self.stats else Dummy)(
-            self.stats_app,
-            name=self.name,
+        return (newrelic.agent.BackgroundTask if self.channel.stats else Dummy)(
+            self.channel.stats_app,
+            name=self.channel.name,
         )
 
-    def worker(self, **kwargs):
-        return ChannelWorker(self, **kwargs)
+    @property
+    def tally(self):
+        return (self.count, self.pending, self.bytes, self.errors)
 
 
-class EditForm(Form):
+    def __call__(self, fo, source=None):
+        # match and validate source
+        if not source:
+            source = self.channel.match(fo)
+            if not source:
+                raise ValueError('Unable to match "{0}" to {1}'.format(fo, self.channel))
+        if source not in self.channel.sources:
+            raise ValueError('"{0}" is not a {1} source'.format(source, self.channel))
+        if isinstance(fo, basestring):
+            with source.open(fo) as fo:
+                return self.__call__(fo, source)
 
-    tracker = form.Dict(form.String(), form.Integer(), default=dict)
 
+        path = getattr(fo, 'name', '<memory>')
+        logger.info('%s:%s consuming from "%s" ... ', self.channel.name, source.name, path)
+        st = time.time()
+        with self.stats():
+            count, pending, bytes, errors = self.step(fo, source)
+        et = time.time()
+        offset = self.channel.tracker.get(path, None)
+        delta = et - st
 
-class TrackingSink(object):
+        logger.info(
+            '%s:%s consumed %s (%s bytes) %s pending from "%s" @ %s in %0.4f sec(s)',
+            self.channel.name, source.name, count, bytes, pending, path, offset or '-', delta
+        )
+        return count, pending, bytes, errors
 
-    def __init__(self, sink, tracker):
-        self.sink = sink
-        self.tracker = tracker
-        self.pending = {}
+    def step(self, fo, source):
+        count = 0
+        pending = 0
+        bytes = 0
+        errors = 0
+        block = None
+        while True:
+            try:
+                for form, block in source.forms(fo):
+                    # pending
+                    if self.sink(form, block):
+                        self.pending_tracker[block.path] = block.end
+                        if not self.flush_at:
+                            self.flush_at = time.time() + self.channel.flush_frequency
+                        self.pending += 1
+                        pending += 1
+                        if self.pending >= self.channel.batch_size:
+                            logger.debug(
+                                '%s:%s reached max batch size %s, flushing ...',
+                                self.channel.name, source.name, self.channel.batch_size
+                            )
+                            self.flush()
+                            count += pending
+                            pending = 0
+                    # emitted
+                    else:
+                        self.tracker[block.path] = block.end
+                        self.flushed()
+                        count += 1
+                        pending = 0
+                    self.bytes += block.end - block.begin
+                    bytes += block.end - block.begin
+                    prev_block = block
+            except Exception, ex:
+                if not block:
+                    raise
+                self.error(ex, fo, block)
+                errors += pending + 1
+                pending = 0
+                prev_block = block
+                continue
+            break
+        return count, pending, bytes, errors
+
+    def flush_poll(self):
+        return max(0, time.time() - self.flush_at)
+
+    def flush_expired(self):
+        if not self.pending:
+            return False
+        return time.time() > self.flush_at
+
+    def flush(self):
+        self.sink.flush()
+        for path, offset in self.pending_tracker.iteritems():
+            self.tracker[path] = offset
+        self.flushed()
+
+    def flushed(self):
+        self.count += self.pending
+        self.pending = 0
+        self.flush_at = None
+        self.slack = self.reset_slack
+        self.pending_tracker.clear()
+
+    def error(self, ex, fo, block):
+        if self.channel.strict and self.slack <= 0:
+            raise
+        logger.exception(ex)
+        self.slack -= 1
+        self.errors += self.pending + 1
+        self.pending = 0
+        if block:
+            self.channel.tracker[block.path] = block.end
+            fo.seek(block.end)
 
     def __enter__(self):
         return self
@@ -249,29 +452,20 @@ class TrackingSink(object):
     def __exit__(self, type, value, traceback):
         self.flush()
 
-    def _flushed(self):
-        for path, offset in self.pending.iteritems():
-            self.tracker[path] = offset
-        self.pending.clear()
 
-    def __call__(self, form, block):
-        pending = self.sink(form, block)
-        if not pending:
-            self.tracker[block.path] = block.end
-            self._flushed()
-        else:
-            self.pending[block.path] = block.end
-        return pending
+class EditForm(Form):
+    """
+    Form for parsing `Channel` edit state.
+    """
 
-    def flush(self):
-        self.sink.flush()
-        self._flushed()
+    tracker = form.Dict(form.String(), form.Integer(), default=dict)
+
 
 
 class Throttle(object):
     """
-    Bounded back-off throttler used to temporarily disable channel source
-    consumption when e.g. sink errors occur:
+    Bounded back-off throttler used to temporarily disable channel consumption
+    when e.g. sink errors occur:
 
     .. code::
 
@@ -316,6 +510,75 @@ class Throttle(object):
         self.expires_at = time.time() + duration
         self.count += 1
         return duration
+
+
+class CannotLock(RuntimeError):
+
+    def __init__(self, channel, timeout, poll, attempts):
+        super(CannotLock, self).__init__(
+            'Channel {0} lock "{1}"cannot be acquired - timeout={2}, poll={3}, attempts={4}'
+            .format(channel.name, channel.lock_file, timeout, poll, attempts)
+        )
+
+
+class ChannelLock(object):
+
+    def __init__(self, channel, timeout=None, poll=1.0):
+        self.channel = channel
+        self.fo = open(channel.lock_file, 'w')
+        self.timeout = timeout
+        self.poll = poll
+
+    def acquire(self, timeout=NONE, poll=NONE):
+        import fcntl
+
+        timeout = self.timeout if timeout is NONE else timeout
+        poll = self.poll if timeout is NONE else poll
+
+        logger.debug(
+            'acquiring channel %s lock ("%s") ...',
+            self.channel.name, self.channel.lock_file
+        )
+        flags = fcntl.LOCK_EX
+        if not timeout:
+            flags |= fcntl.LOCK_NB
+        else:
+            timeout_at = time.time() + timeout
+        attempts = 0
+        while True:
+            try:
+                attempts += 1
+                fcntl.lockf(self.fo.fileno(), flags)
+            except IOError as ex:
+                if ex.errno not in (errno.EACCES, errno.EAGAIN):
+                    raise
+                if not self.timeout or timeout_at < time.time():
+                    raise CannotLock(self.channel, timeout, poll)
+            logger.info(
+                'channel %s locked ("%s") on attempt %s, sleeping %s sec(s)',
+                self.channel.name, self.channel.lock_file, poll, attempts,
+            )
+            time.sleep(poll)
+        logger.debug(
+            'channel %s locked ("%s") on attempt %s',
+            self.channel.name, self.channel.lock_file, attempts,
+        )
+        return self
+
+    def release(self):
+        import fcntl
+
+        fcntl.lockf(self.fo.fileno(), fcntl.LOCK_UN)
+        logger.debug(
+            'channel %s unlocked ("%s")',
+            self.channel.name, self.channel.lock_file
+        )
+
+    def __enter__(self):
+        return self.acquire()
+
+    def __exit__(self, type, value, traceback):
+        self.release()
 
 
 class Tracker(collections.MutableMapping):
@@ -468,88 +731,18 @@ class ChannelSource(Source):
                     )
                     continue
             if self.channel.filter and not self.channel.filter(form, offset):
-                logger.debug(
-                    '%s:%s @ %s filtered', self.channel.name, self.name, offset
-                )
                 continue
             yield form, offset
 
     def consume(self, fo):
-        if isinstance(fo, basestring):
-            path = fo
-            with self.open(path) as fo:
-                if path not in self.channel.tracker:
-                    self.channel.tracker[path] = fo.tell()
-                return self.consume(fo)
-        path = getattr(fo, 'name', '<memory>')
-        count = 0
-        bytes = 0
-        pending = 0
-        errors = 0
-        reset_slack = self.channel.strict_slack
-        slack = reset_slack
-        st = time.time()
-        with contextlib.nested(
-                self.channel.stats_sample(),
-                self.channel.sink
-            ):
-            while True:
-                block = None
-                try:
-                    for form, block in self.forms(fo):
-                        if self.channel.sink(form, block):
-                            # pending
-                            if (self.channel.batch_size and
-                                pending >= self.channel.batch_size):
-                                # flush
-                                logger.debug(
-                                    '%s:%s reached max batch size %s, flushing ...',
-                                    self.channel.name, self.name, self.channel.batch_size
-                                )
-                                self.channel.sink.flush()
-
-                                # emitted
-                                count += pending + 1
-                                slack = reset_slack
-                                pending = 0
-                            else:
-                                pending += 1
-                        else:
-                            # emitted
-                            count += pending + 1
-                            slack = reset_slack
-                            pending = 0
-                        bytes += block.end - block.begin
-                except KeyboardInterrupt:
-                    raise
-                except Exception, ex:
-                    if self.channel.strict and slack <= 0:
-                        raise
-                    logger.exception(ex)
-                    slack -= 1
-                    errors += pending + 1
-                    pending = 0
-                    if block:
-                        self.channel.tracker[path] = block.end
-                        fo.seek(block.end)
-                    continue
-                break
-        count += pending
-        pending = 0
-        et = time.time()
-        delta = et - st
-        offset = self.channel.tracker.get(path, None)
-        logger.info(
-            '%s:%s consumed %s (%s bytes) from "%s" @ %s in %0.4f sec(s)',
-            self.channel.name, self.name, count, bytes, path, offset or '-', delta
-        )
-        return count, bytes, errors, delta
+        return self.channel.consume(fo, self)
 
 
 class ChannelWorker(threading.Thread):
 
     def __init__(self, channel, **kwargs):
         self.channel = channel
+        self.consume = self.channel.consumer()
         self.throttle = Throttle(
             duration=channel.throttle_duration,
             cap=channel.throttle_cap,
@@ -557,7 +750,7 @@ class ChannelWorker(threading.Thread):
         )
         if 'name' not in kwargs:
             kwargs['name'] = 'Channel-{0}'.format(channel.name)
-        self.queue = Queue.Queue(maxsize=2)
+        self.queue = Queue.Queue(maxsize=self.channel.queue_size)
         self.queue_poll = self.channel.queue_poll
         self.matches = {}
         super(ChannelWorker, self).__init__(**kwargs)
@@ -575,7 +768,7 @@ class ChannelWorker(threading.Thread):
             return True
         except Queue.Full:
             logger.debug(
-               'channel "%s" worker queue is full @ %s, discarding ...',
+               'channel %s worker queue is full @ %s, discarding ...',
                self.channel.name, self.queue.qsize(),
             )
             return False
@@ -590,8 +783,8 @@ class ChannelWorker(threading.Thread):
         if not source:
             return 0
         try:
-            with source.open(event.path):
-                count = source.consume(event.path)
+            count, bytes, pending, errors, delta = self.consume(event.path, source)
+            if count:
                 self.throttle.reset()
         except IOError, ex:
             if ex.errno == errno.ENOENT:
@@ -605,38 +798,52 @@ class ChannelWorker(threading.Thread):
     # event loop
 
     def run(self):
-        logger.info('entering channel "%s" event loop', self.channel.name)
+        logger.info('entering channel %s event loop', self.channel.name)
         while True:
-            if self.throttle:
-                time.sleep(min(
-                    max(0, time.time() - self.throttle.expires_at),
-                    self.queue_poll
-                ))
-                continue
             try:
-                event = self.queue.get(block=True, timeout=self.queue_poll)
-            except Queue.Empty:
-                continue
-            if self.throttle:
-                self.queue.task_done()
-                self.enqueue(event)
-                continue
-            try:
-                if event.is_delete:
-                    self.on_delete_file(event)
-                elif event.is_create:
-                    self.on_create_file(event)
-                elif event.is_modify:
-                    self.on_modify_file(event)
-                self.queue.task_done()
+                if self.throttle:
+                    time.sleep(max(0, time.time() - self.throttle.expires_at))
+                self.step()
             except Exception:
                 duration = self.throttle()
                 logger.exception(
                     'throttling channel %s worker for %s sec(s)',
                     self.channel.name, duration
                 )
-                self.enqueue(event)
-                continue
+
+    def step(self):
+        try:
+            timeout = self.queue_poll
+            if self.consume.pending:
+                timeout = min(self.consume.flush_poll, self.queue_poll)
+            event = self.queue.get(block=True, timeout=timeout)
+        except Queue.Empty:
+            if self.consume.flush_expired:
+                self.consume.flush()
+            return False
+        if self.throttle:
+            self.queue.task_done()
+            self.enqueue(event)
+            return False
+        try:
+            if self.consume.flush_expired:
+                self.consume.flush()
+            if event.is_delete:
+                self.on_delete_file(event)
+            elif event.is_create:
+                self.on_create_file(event)
+            elif event.is_modify:
+                self.on_modify_file(event)
+            self.queue.task_done()
+        except Exception:
+            duration = self.throttle()
+            logger.exception(
+                'throttling channel %s worker for %s sec(s)',
+                self.channel.name, duration
+            )
+            self.enqueue(event)
+        return True
+
 
 class ChannelEvent(collections.namedtuple('ChannelEvent', ['path', 'flags'])):
 

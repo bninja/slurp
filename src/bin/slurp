@@ -197,8 +197,9 @@ def consume_all(args):
         lambda x: args.config.channel(x, stats=args.stats, **overrides),
         filter(ChannelFilter(args.includes, args.excludes), args.config.channel_names)
     )
-    for result in slurp.consume(args.files, channels):
-        print(*result)
+    for channel_name, source_matches, count, bytes, errors in slurp.consume(args.files, channels):
+        print(channel_name, count, bytes, errors, '-', end=' ')
+        print(*['{0}:{1}'.format(source_name, path) for source_name, path in source_matches])
 
 
 
