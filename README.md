@@ -6,7 +6,7 @@ Installing
 From [PyPI](https://pypi.python.org/pypi/):
 
 ```bash
-$ sudo pip instal slurp[watch,stats,elasticsearch]
+$ sudo pip install slurp[watch,stats,elasticsearch]
 ```
 
 which will drop all the code, but for system integration use a package:
