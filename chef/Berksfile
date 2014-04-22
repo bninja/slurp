@@ -6,5 +6,6 @@ metadata
 
 group :test do
     cookbook 'balanced-apt'
+    cookbook 'sysctl'
     cookbook 'slurp_test', path: './test/cookbooks/slurp_test'
 end

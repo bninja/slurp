@@ -28,29 +28,29 @@ describe command('slurp consume -b -t /tmp/test-slurp/test.log') do
     should include <<EOF
 bytes: 1950
 count: 6
-test-channel test-source /tmp/test-slurp/test.log 6 1950 0
+test-channel 6 1950 0 - test-source:/tmp/test-slurp/test.log
 EOF
   }
 end
 
-describe command('slurp consume -b -t < /tmp/test-slurp/test.log') do
+describe command('slurp consume - -b -t < /tmp/test-slurp/test.log') do
   it { should return_exit_status 0 }
   its(:stdout) {
     should include <<EOF
 bytes: 1950
 count: 6
-test-channel test-source /tmp/test-slurp/test.log 6 1950 0
+test-channel 6 1950 0 - test-source:<stdin>
 EOF
   }
 end
 
-describe command('cat /tmp/test-slurp/test.log | slurp consume -b -t') do
+describe command('cat /tmp/test-slurp/test.log | slurp consume - -b -t') do
   it { should return_exit_status 0 }
   its(:stdout) {
     should include <<EOF
 bytes: 1950
 count: 6
-test-channel test-source /tmp/test-slurp/test.log 6 1950 0
+test-channel 6 1950 0 - test-source:<stdin>
 EOF
   }
 end

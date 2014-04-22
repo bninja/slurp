@@ -24,6 +24,8 @@ end
   end
 end
 
+include_recipe 'sysctl'
+
 sysctl_param 'fs.inotify.max_user_watches' do
   value 16384
 end
