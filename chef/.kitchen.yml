@@ -1,9 +1,6 @@
 ---
 driver:
-  name: ec2
-  region: us-west-1
-  availability_zone: us-west-1a
-  ssh_key: <%= ENV['AWS_KEYFILE'] %>
+  name: vagrant
 
 provisioner:
   name: chef_solo
@@ -15,7 +12,7 @@ suites:
   - name: default
     run_list:
     - recipe[balanced-apt]
-    - recipe[slurp_test]    
+    - recipe[slurp_test]
     attributes:
       citadel:
         access_key_id: <%= ENV['AWS_ACCESS_KEY_ID'] %>

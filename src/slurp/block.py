@@ -58,6 +58,7 @@ import functools
 import logging
 import os
 import re
+import stat
 
 
 logger = logging.getLogger(__name__)
@@ -124,6 +125,18 @@ class Blocks(object):
         return self.fo.seek(offset, whence)
 
 
+def is_terminal(fo):
+    return hasattr(fo, 'isatty') and fo.isatty()
+
+
+def is_piped(fo):
+    # http://stackoverflow.com/a/13443424
+    if not hasattr(fo, 'fileno'):
+        return False
+    mode = os.fstat(fo.fileno()).st_mode
+    return stat.S_ISFIFO(mode)
+
+
 class BlockIterator(object):
     """
     Base class for "block" parsers. A "block" within a file is just a delimited
@@ -134,7 +147,7 @@ class BlockIterator(object):
     def __init__(self, fo, strict=False, read_size=2048, max_buffer_size=1048576):
         self.fo = fo
         self.path = getattr(self.fo, 'name', '<memory>')
-        if hasattr(fo, 'isatty') and fo.isatty():
+        if is_terminal(fo) or is_piped(fo):
             self.pos = 0
         else:
             self.pos = fo.tell()
