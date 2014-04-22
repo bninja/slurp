@@ -23,3 +23,7 @@ end
       mode '0666'
   end
 end
+
+sysctl_param 'fs.inotify.max_user_watches' do
+  value 16384
+end

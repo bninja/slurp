@@ -19,3 +19,5 @@ suites:
         secret_access_key: <%= ENV['AWS_SECRET_ACCESS_KEY'] %>
       balanced-apt:
         allow_unstable: true
+      slurp:
+        max_user_watches: 16384

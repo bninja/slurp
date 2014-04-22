@@ -1,27 +1,33 @@
+slurp (0.6.6) unstable; urgency=low
+
+  * 0.6.6 release.
+
+ -- me <me@aitmp.com>  Thu, 22 Apr 2014 11:09:16 -0800
+
 slurp (0.6.5) unstable; urgency=low
 
   * 0.6.5 release.
 
  -- me <me@aitmp.com>  Thu, 16 Mar 2014 14:13:16 -0800
- 
+
 slurp (0.6.4) unstable; urgency=low
 
   * 0.6.4 release.
 
  -- me <me@aitmp.com>  Thu, 13 Mar 2014 14:13:16 -0800
- 
+
 slurp (0.6.3) unstable; urgency=low
 
   * 0.6.3 release.
 
  -- me <me@aitmp.com>  Thu, 10 Mar 2014 14:13:16 -0800
- 
+
 slurp (0.6.1) unstable; urgency=low
 
   * 0.6.1 release.
 
  -- me <me@aitmp.com>  Thu, 6 Mar 2014 14:13:16 -0800
- 
+
 slurp (0.6.0) UNRELEASED; urgency=low
 
   * 0.6.0 release.
