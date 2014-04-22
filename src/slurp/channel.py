@@ -24,7 +24,7 @@ try:
 except ImportError:
     pass
 
-from . import settings, Settings, Source, form, Form
+from . import settings, Settings, Source, form, Form, seekable
 
 
 logger = logging.getLogger(__name__)
@@ -368,7 +368,7 @@ class ChannelConsumer(object):
             '%s:%s consumed %s (%s bytes) %s pending from "%s" @ %s in %0.4f sec(s)',
             self.channel.name, source.name, count, bytes, pending, path, offset or '-', delta
         )
-        if not bytes:
+        if not bytes and seekable(fo):
             self.tracker[path] = fo.tell()
         return count, pending, bytes, errors
 

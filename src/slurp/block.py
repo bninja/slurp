@@ -125,6 +125,10 @@ class Blocks(object):
         return self.fo.seek(offset, whence)
 
 
+def seekable(fo):
+    return not is_terminal(fo) and not is_piped(fo)
+
+
 def is_terminal(fo):
     return hasattr(fo, 'isatty') and fo.isatty()
 
@@ -147,10 +151,7 @@ class BlockIterator(object):
     def __init__(self, fo, strict=False, read_size=2048, max_buffer_size=1048576):
         self.fo = fo
         self.path = getattr(self.fo, 'name', '<memory>')
-        if is_terminal(fo) or is_piped(fo):
-            self.pos = 0
-        else:
-            self.pos = fo.tell()
+        self.pos = fo.tell() if seekable(fo) else 0
         self.strict = strict
         self.read_size = read_size
         self.max_buffer_size = max_buffer_size

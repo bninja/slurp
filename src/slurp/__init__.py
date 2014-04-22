@@ -8,7 +8,7 @@ except ImportError:
     pyinotify = None
 
 from . import settings, form
-from .block import Block, Blocks
+from .block import Block, Blocks, seekable
 from .settings import Settings
 from .form import Form
 from .sink import Sink, SinkSettings, Echo, Drop, Tally
